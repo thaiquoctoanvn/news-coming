@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
 const envSchema = z.object({
-  SUPABASE_URL: z.url(),
+  // supabase-js appends /rest/v1 itself; a URL copied from the Data API page already
+  // contains it and every request then fails with "Invalid path specified in request URL".
+  SUPABASE_URL: z.url().transform((value) => new URL(value).origin),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
   SEC_USER_AGENT: z
     .string()
