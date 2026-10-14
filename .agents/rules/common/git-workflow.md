@@ -9,6 +9,17 @@
 
 Types: feat, fix, refactor, docs, test, chore, perf, ci
 
+### Project rules (override — always apply)
+
+- **Short:** at most 2 lines — the subject line, plus one optional body line. No bullet lists.
+- Subject ≤ 72 characters.
+- **No AI attribution:** never add `Co-Authored-By` trailers for AI tools, "Generated with …" lines, or any AI/assistant/model name to commit messages.
+
+```
+feat: add topic-based schema and RLS migrations
+Seed macro_finance topic with verified sources.
+```
+
 ## Pull Request Workflow
 
 When creating PRs:

@@ -46,6 +46,7 @@
 - **Zero cost:** never use, enable, or upgrade to any paid service, plan, model, or add-on, and never add billing or a payment method. Adding any new external service — even a free one — requires asking the user first. When unsure whether something costs money, stop and ask. (`@.agents/rules/cost.md`)
 - Never commit secrets; the repo is public. Secrets live only in GitHub Secrets/Environments and Supabase Secrets/Vault.
 - All changes go through a PR into `main`; never push directly to `main`.
+- Commit messages: at most 2 lines (`<type>: <description>` + one optional body line), and never any AI name or attribution (no `Co-Authored-By` AI trailer). (`@.agents/rules/common/git-workflow.md`)
 - Migrations are forward-only; never edit a merged migration. Seed config uses `on conflict do nothing`.
 - Where an ecc rule conflicts with the design, the **Project overrides** in `@.agents/rules/README.md` win.
 
