@@ -13,7 +13,7 @@ Hệ thống bản tin theo **topic**: mỗi topic tự động lấy tin từ n
 | 1 | Tổ chức dữ liệu | **Topic là cấp cao nhất.** Mọi thứ (danh mục, tổ chức, nguồn, slot, lịch chạy, số liệu, lịch sự kiện, bản tin, quota) thuộc về 1 topic. Mỗi cấp đều bật/tắt được |
 | 2 | DB / Auth | Supabase Free (Postgres + RLS + Auth + Edge Functions + Realtime + pg_cron) |
 | 3 | Web | Vite + React SPA + HeroUI v3 + Tailwind v4, deploy Netlify (chỉ static, không SSR) |
-| 4 | Worker | Node.js/TypeScript chạy trên GitHub Actions (repo **public** → không giới hạn phút) |
+| 4 | Worker | Node.js 24/TypeScript (chạy `.ts` trực tiếp, không cần build) trên GitHub Actions (repo **public** → không giới hạn phút) |
 | 5 | Lập lịch | Lịch chạy cấu hình theo topic trong DB; Supabase pg_cron kiểm tra và gọi GitHub `workflow_dispatch` |
 | 6 | Nguồn tin | **Không dùng X.** Nguồn chính thức + RSS báo lớn + Google News RSS + SEC EDGAR |
 | 7 | AI | Model A (Groq) chấm điểm + tóm tắt; Model B (Gemini) dịch. Fallback chain cấu hình trong DB. Prompt dựng động theo cấu hình topic |
@@ -161,7 +161,8 @@ final_score = impact × 10
 
 | `kind` | Hành vi |
 |---|---|
-| `category` | Lấy tin điểm cao nhất thuộc `category_ids`, tối đa `max_items` |
+| `category` | Lấy tin điểm cao nhất thuộc `category_ids`, tối đa `max_items`; từ tin thứ 2 trở đi phải đạt `extra_item_min_score` (nếu có) |
+| `per_category` | Mỗi category trong `category_ids` lấy 1 tin; category không có tin đạt sàn thì bỏ trống |
 | `per_entity` | Mỗi entity trong `entity_ids` lấy 1 tin; entity không có tin đạt sàn thì bỏ trống |
 | `fill` | Lấp đến kích thước edition theo `final_score` giảm dần |
 
@@ -175,7 +176,7 @@ Seed cho Vĩ mô / Tài chính:
 | 2 | FED | category | fed | 1–2 (tin 2 nếu ≥ 70) | 40 | — |
 | 3 | Lợi suất Mỹ + Nhật | category | yield_us, yield_jp | 1 | 40 | us_yields, jp_yields |
 | 4 | Tổ chức | per_entity | Strategy, BitMine, Coinbase, Circle, BlackRock | 0–5 | 35 | — |
-| 5 | Địa chính trị + Vàng | category | geo, gold | 1–2 | 45 | — |
+| 5 | Địa chính trị + Vàng | per_category | geo, gold | 1–2 | 45 | — |
 | 6 | Còn lại | fill | tất cả | phần còn lại | 50 | — |
 
 Edition `pre_us` chỉ xét tin sau `window_end` của edition trước cùng ngày, loại tin đã xuất hiện, và kèm sự kiện trong phiên Mỹ hôm đó.
@@ -200,9 +201,11 @@ Thứ tự hiển thị: tin ghim → slot theo `position`.
 
 ## 7. Nguồn dữ liệu — topic Vĩ mô / Tài chính
 
-> URL cần verify bằng script ở Phase 1.
+> Đã verify ngày 2026-10-14 bằng `apps/worker/scripts/verify-sources.ts` (`pnpm verify:sources`). Cấu hình thật nằm trong migration seed.
 
 ### 7.1 Tin tức (`sources`)
+
+Đã loại sau khi kiểm tra: blog Coinbase (403), blog Circle (không có RSS), Stooq (404) → thay bằng Google News + EDGAR + Yahoo. EDGAR bắt buộc `SEC_USER_AGENT` có email liên hệ (thiếu → 403). CIK đã xác nhận: Strategy `0001050446`, BitMine `0001829311`, Coinbase `0001679788`, Circle `0001876042`, BlackRock `0002012383`.
 
 | Category / Entity | Nguồn | Endpoint | Authority |
 |---|---|---|---|
@@ -211,10 +214,10 @@ Thứ tự hiển thị: tin ghim → slot theo `position`.
 | treasury | Treasury press releases | `home.treasury.gov/news/press-releases` (RSS/HTML — verify) | +10 |
 | yield_jp | BOJ / MOF Japan | trang thông báo BOJ, MOF (verify RSS) | +10 |
 | entities | SEC EDGAR | `https://data.sec.gov/submissions/CIK##########.json` (8-K, 10-Q, 13F, S-1). Header bắt buộc `User-Agent: news-coming <email>` | +10 |
-| entities | Newsroom/blog Coinbase, Circle, BlackRock, Grayscale, Binance | RSS/JSON từng trang (verify) | +5 |
+| crypto | Binance announcements (JSON không chính thức) | `binance.com/bapi/composite/v1/public/cms/article/list/query` | +5 |
 | mọi category | Google News RSS theo query | `https://news.google.com/rss/search?q=<query>+when:1d&hl=en-US&gl=US&ceid=US:en` | theo domain gốc |
 | crypto, tokenization | CoinDesk, The Block | `https://www.coindesk.com/arc/outboundfeeds/rss/`, `https://www.theblock.co/rss.xml` | 0 |
-| geo | GDELT DOC API | `https://api.gdeltproject.org/api/v2/doc/doc?query=…&mode=artlist&format=json` | 0 |
+| geo | GDELT DOC API (**tắt sẵn**: giới hạn 1 request/5s/IP, hay trả 429) | `https://api.gdeltproject.org/api/v2/doc/doc?query=…&mode=artlist&format=json` | 0 |
 
 Query Google News khởi điểm (mỗi query là 1 source):
 - oil: `oil prices OR brent OR WTI OR OPEC`
@@ -231,7 +234,7 @@ Query Google News khởi điểm (mỗi query là 1 source):
 |---|---|---|---|
 | `us_yields` | số liệu | Treasury Daily Yield Curve XML; dự phòng FRED (`DGS2`, `DGS10`, `DGS30`) | FRED key free |
 | `jp_yields` | số liệu | MOF Japan `jgbcme.csv` | trễ 1 ngày làm việc |
-| `oil_price` | số liệu | Stooq/Yahoo (gần realtime, **không chính thức**) → dự phòng EIA API v2 (`RWTC`, `RBRTE`) | EIA key free, trễ ~1 ngày |
+| `oil_price` | số liệu | Yahoo chart `CL=F`, `BZ=F` (gần realtime, **không chính thức**) → dự phòng EIA API v2 (`RWTC`, `RBRTE`) | EIA key free, trễ ~1 ngày |
 | `macro_calendar` | lịch | FOMC (HTML `fomccalendars.htm`), BLS `.ics`, lịch BEA, Treasury FiscalData `/v1/accounting/od/auctions_query`, lịch BOJ | |
 
 ---
@@ -250,231 +253,18 @@ Query Google News khởi điểm (mỗi query là 1 source):
 
 ---
 
-## 9. Schema DB (draft)
+## 9. Schema DB
 
-```sql
-create type article_status as enum ('raw','filtered_out','scored','selected','summarized','translated','failed');
-create type source_kind    as enum ('rss','google_news','edgar','gdelt','html','json');
-create type slot_kind      as enum ('category','per_entity','fill');
+Schema thật nằm trong migration, không lặp lại ở đây để tránh lệch:
 
--- ===== Cấu hình =====
-create table topics (
-  id text primary key,                         -- 'macro_finance'
-  name_vi text not null,                       -- 'Vĩ mô / Tài chính'
-  description_vi text,
-  position smallint not null default 0,
-  enabled boolean not null default true,
-  scoring_guide text not null,                 -- thang impact + ví dụ, chèn vào prompt
-  ai_daily_request_cap int not null default 60,
-  settings jsonb not null default '{}'         -- pin rule, more_batch_size, daily_cap_more, daily_cap_refresh, retention
-);
+| File | Nội dung |
+|---|---|
+| `supabase/migrations/20261014000100_schema.sql` | Enum, bảng cấu hình (topics, categories, entities, sources, data_modules, editions, digest_slots), dữ liệu (articles, digests, digest_items, market_data, events), vận hành (crawl_runs, ai_providers, ai_usage, action_quota, app_settings, login_attempts) |
+| `supabase/migrations/20261014000200_security.sql` | `is_admin()`, `is_topic_public()`, grants theo cột, RLS |
+| `supabase/migrations/20261014000300_seed_macro_finance.sql` | Cấu hình topic Vĩ mô / Tài chính |
+| `supabase/tests/database/rls.test.sql` | Test pgTAP cho quyền truy cập |
 
-create table categories (
-  topic_id text references topics on delete cascade,
-  id text not null,                            -- 'oil','fed',...
-  name_vi text not null,
-  keywords text[] not null default '{}',
-  exclude_keywords text[] not null default '{}',
-  position smallint not null default 0,
-  enabled boolean not null default true,
-  primary key (topic_id, id)
-);
-
-create table entities (
-  topic_id text references topics on delete cascade,
-  id text not null,                            -- 'strategy','bitmine',...
-  name text not null,
-  aliases text[] not null default '{}',
-  sec_cik text,
-  enabled boolean not null default true,
-  primary key (topic_id, id)
-);
-
-create table sources (
-  id uuid primary key default gen_random_uuid(),
-  topic_id text not null references topics on delete cascade,
-  name text not null,
-  kind source_kind not null,
-  url text,
-  query text,
-  default_category_id text,                    -- (topic_id, default_category_id) → categories
-  default_entity_id text,                      -- (topic_id, default_entity_id)   → entities
-  authority smallint not null default 0,
-  enabled boolean not null default true,
-  last_fetched_at timestamptz,
-  last_error text
-);
-
-create table data_modules (
-  topic_id text references topics on delete cascade,
-  id text not null,                            -- 'oil_price','us_yields','jp_yields','macro_calendar'
-  connector text not null,                     -- tên connector trong code
-  name_vi text not null,
-  config jsonb not null default '{}',          -- series, nguồn chính/dự phòng
-  enabled boolean not null default true,
-  primary key (topic_id, id)
-);
-
-create table editions (
-  topic_id text references topics on delete cascade,
-  id text not null,                            -- 'morning','pre_us'
-  name_vi text not null,
-  timezone text not null,                      -- 'Asia/Ho_Chi_Minh','America/New_York'
-  local_time time not null,
-  weekdays smallint[] not null default '{1,2,3,4,5,6,7}',
-  size_min smallint not null,
-  size_max smallint not null,
-  run_modules boolean not null default true,   -- có chạy data modules trong edition này không
-  enabled boolean not null default true,
-  primary key (topic_id, id)
-);
-
-create table digest_slots (
-  topic_id text references topics on delete cascade,
-  id text not null,
-  position smallint not null,
-  label_vi text not null,
-  kind slot_kind not null,
-  category_ids text[] not null default '{}',
-  entity_ids text[] not null default '{}',
-  min_items smallint not null default 0,
-  max_items smallint not null default 1,
-  min_score int not null default 0,
-  attach_modules text[] not null default '{}',
-  enabled boolean not null default true,
-  primary key (topic_id, id)
-);
-
--- ===== Dữ liệu =====
-create table articles (
-  id uuid primary key default gen_random_uuid(),
-  topic_id text not null references topics on delete cascade,
-  source_id uuid references sources on delete set null,
-  url text not null,
-  url_hash text not null,
-  cluster_key text,
-  title text not null,
-  description text,
-  content_snippet text,
-  published_at timestamptz,
-  fetched_at timestamptz not null default now(),
-  status article_status not null default 'raw',
-  category_id text,
-  entity_id text,
-  impact smallint,
-  direction text,
-  explains text,                               -- data module id
-  ai_reason text,
-  source_count int not null default 1,
-  final_score int,
-  summary_en text,
-  title_vi text,
-  summary_vi text,
-  translated_at timestamptz,
-  error text,
-  unique (topic_id, url_hash)
-);
-create index on articles (topic_id, status, final_score desc);
-create index on articles (topic_id, published_at desc);
-
-create table digests (
-  id uuid primary key default gen_random_uuid(),
-  topic_id text not null,
-  edition_id text not null,
-  digest_date date not null,
-  window_start timestamptz not null,
-  window_end timestamptz not null,
-  created_at timestamptz not null default now(),
-  foreign key (topic_id, edition_id) references editions on delete cascade,
-  unique (topic_id, edition_id, digest_date)
-);
-
-create table digest_items (
-  digest_id uuid references digests on delete cascade,
-  article_id uuid references articles on delete cascade,
-  position smallint not null,
-  slot_id text,
-  is_pinned boolean not null default false,
-  added_by text not null default 'auto',       -- 'auto' | 'more'
-  primary key (digest_id, article_id)
-);
-
-create table market_data (
-  topic_id text not null,
-  module_id text not null,
-  series text not null,                        -- 'US10Y','JP10Y','WTI','BRENT',...
-  obs_date date not null,
-  value numeric not null,
-  source text not null,
-  foreign key (topic_id, module_id) references data_modules on delete cascade,
-  primary key (topic_id, series, obs_date)
-);
-
-create table events (
-  id uuid primary key default gen_random_uuid(),
-  topic_id text not null,
-  module_id text not null,
-  kind text not null,                          -- 'fomc','cpi','nfp','auction','boj',...
-  title text not null,
-  title_vi text,
-  starts_at timestamptz not null,
-  importance smallint not null default 2,
-  source_url text,
-  foreign key (topic_id, module_id) references data_modules on delete cascade,
-  unique (topic_id, kind, starts_at, title)
-);
-
--- ===== Vận hành =====
-create table crawl_runs (
-  id uuid primary key default gen_random_uuid(),
-  topic_id text not null references topics on delete cascade,
-  edition_id text,
-  trigger text not null,                       -- 'schedule' | 'manual' | 'backup'
-  started_at timestamptz not null default now(),
-  finished_at timestamptz,
-  status text not null default 'running',
-  stats jsonb not null default '{}',
-  error text
-);
-
-create table ai_providers (
-  id text primary key,
-  role text not null,                          -- 'extract' | 'translate'
-  provider text not null,
-  model text not null,
-  priority smallint not null,
-  daily_request_limit int not null,
-  rpm_limit int not null,
-  enabled boolean not null default true
-);
-
-create table ai_usage (
-  provider_id text references ai_providers,
-  topic_id text references topics on delete cascade,
-  usage_date date not null,
-  requests int not null default 0,
-  tokens_in int not null default 0,
-  tokens_out int not null default 0,
-  primary key (provider_id, topic_id, usage_date)
-);
-
-create table action_quota (
-  topic_id text references topics on delete cascade,
-  action text not null,                        -- 'more' | 'refresh'
-  usage_date date not null,
-  count int not null default 0,
-  primary key (topic_id, action, usage_date)
-);
-
-create table app_settings (key text primary key, value jsonb not null);  -- cấu hình toàn hệ thống
-
-create table login_attempts (
-  ip_hash text not null,
-  attempted_at timestamptz not null default now()
-);
-```
-
-Các khóa ngoại phức hợp còn thiếu trong draft (`sources`, `articles` → `categories`/`entities`) sẽ bổ sung ở migration thật.
+Khác so với bản draft ban đầu: thêm slot kind `per_category`, cột `digest_slots.extra_item_min_score`, `articles.source_name` (để public hiển thị tên nguồn mà không cần đọc bảng `sources`), enum `impact_direction`, và khóa ngoại phức hợp tới categories/entities (`on delete set null` theo cột). `ai_providers` chưa seed — model và hạn mức sẽ được kiểm tra thực tế ở Phase 3.
 
 ---
 
@@ -572,7 +362,7 @@ news-coming/
 └─ pnpm-workspace.yaml
 ```
 
-Core logic viết TypeScript thuần trong `supabase/functions/_shared/` để dùng chung cho worker (Node 22) và Edge Functions (Deno).
+Core logic viết TypeScript thuần trong `supabase/functions/_shared/` để dùng chung cho worker (Node 24) và Edge Functions (Deno).
 
 ---
 
@@ -585,7 +375,7 @@ Core logic viết TypeScript thuần trong `supabase/functions/_shared/` để d
 | DB (schema, RLS, pg_cron) | `supabase db push` | `supabase/migrations/**` |
 | Edge Functions | `supabase functions deploy` | `supabase/functions/**` |
 | Web | build trong GitHub Actions → `netlify deploy --prod --dir apps/web/dist` | `apps/web/**`, `supabase/functions/_shared/**` (type dùng chung), lockfile |
-| Worker | **Không cần deploy**: `run.yml` checkout tag `prod`; deploy xong thì dời tag `prod` về commit vừa deploy | `apps/worker/**`, `supabase/functions/_shared/**` |
+| Worker | **Không cần deploy**: `run.yml` checkout tag `prod`; tag chỉ được dời khi DB và Functions đã ở cùng commit | `apps/worker/**`, `supabase/functions/_shared/**` |
 
 Chỉ phần nào thay đổi mới được deploy (dùng `dorny/paths-filter`). Commit chỉ sửa `docs/` không kích hoạt deploy.
 
@@ -605,12 +395,14 @@ push main ──► deploy.yml  (chỉ chạy khi ci.yml xanh; environment "prod
                1. Migrations      supabase db push --dry-run → supabase db push
                2. Edge Functions  supabase functions deploy (chỉ function thay đổi)
                3. Web             vite build → netlify deploy --prod
-               4. Worker          git tag -f prod <sha> && git push -f origin prod
+               4. Worker          dời tag prod (chỉ khi DB + Functions không còn pending)
                ✔ mỗi bước chỉ chạy khi bước trước thành công
 ```
 
 - **Thứ tự cố định DB → Functions → Web → Worker**: code mới không bao giờ chạy trên schema cũ.
-- **Tag `prod`**: worker luôn chạy code đã deploy trọn vẹn. Nếu bước migration lỗi, worker vẫn chạy bản cũ ổn định thay vì code mới trên schema cũ.
+- **Tag theo từng phần** `deployed/db`, `deployed/functions`, `deployed/web`: mỗi phần so thay đổi với tag của chính nó. Phần bị bỏ qua (chưa cấu hình secret, web đang tạm dừng) giữ tag cũ nên lần chạy sau tự deploy bù.
+- **Tag `prod`**: worker luôn chạy code đã deploy trọn vẹn. Nếu migration lỗi hoặc còn pending, `prod` đứng yên → worker vẫn chạy bản cũ ổn định thay vì code mới trên schema cũ.
+- `deploy.yml` chạy qua `workflow_run` sau khi CI xanh trên `main`, hoặc chạy tay (`workflow_dispatch`) với SHA bất kỳ để rollback.
 - `concurrency: deploy` — không có 2 lần deploy chồng nhau; `run.yml` dùng chung group với bước dời tag để worker không bị đổi code giữa chừng.
 
 ### 13.3 Quy tắc migration

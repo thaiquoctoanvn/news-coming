@@ -1,0 +1,9 @@
+{
+  "name": "@news-coming/worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "verify:sources": "node scripts/verify-sources.ts"
+  }
+}
