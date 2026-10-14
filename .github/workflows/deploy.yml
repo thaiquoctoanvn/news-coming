@@ -1,0 +1,150 @@
+name: Deploy
+
+# Runs after CI succeeds on main (docs/DESIGN.md §13).
+# Order is fixed: DB migrations → Edge Functions → Web → move the `prod` tag used by the worker.
+# Each part keeps its own tag (deployed/db, deployed/functions, deployed/web) and is deployed only
+# when files changed since that tag. A part that is skipped (not configured, paused) keeps its old
+# tag, so the change is picked up by the next run. The worker tag `prod` only moves when DB and
+# functions are up to date, so new worker code never runs against an old schema.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit SHA to deploy (use an older SHA to roll back)
+        required: true
+      deploy_all:
+        description: Deploy every part, ignoring change detection
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DEPLOY_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          fetch-depth: 0
+
+      - name: Resolve full commit SHA
+        run: echo "DEPLOY_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Detect changes since last deploy of each part
+        id: changes
+        run: |
+          changed() { # $1 = tag, $2 = path regex
+            if [ "${{ inputs.deploy_all }}" = "true" ] || ! git rev-parse -q --verify "refs/tags/$1" >/dev/null; then
+              files=$(git ls-files)
+            else
+              files=$(git diff --name-only "$1" "$DEPLOY_SHA")
+            fi
+            echo "$files" | grep -Eq "$2" && echo true || echo false
+          }
+          echo "db=$(changed deployed/db '^supabase/migrations/')" >> "$GITHUB_OUTPUT"
+          echo "functions=$(changed deployed/functions '^supabase/functions/')" >> "$GITHUB_OUTPUT"
+          echo "web=$(changed deployed/web '^(apps/web/|supabase/functions/_shared/|pnpm-lock.yaml)')" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+      - name: Check Supabase configuration
+        id: supabase
+        run: |
+          if [ -z "$SUPABASE_PROJECT_REF" ] || [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$SUPABASE_DB_PASSWORD" ]; then
+            echo "::warning::Supabase secrets not set in environment 'production' — skipping DB and function deploys."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: supabase/setup-cli@v1
+        if: steps.supabase.outputs.ready == 'true'
+        with:
+          version: 2.120.0
+
+      - name: Link Supabase project
+        if: steps.supabase.outputs.ready == 'true' && (steps.changes.outputs.db == 'true' || steps.changes.outputs.functions == 'true')
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+
+      - name: 1. Database migrations
+        if: steps.supabase.outputs.ready == 'true' && steps.changes.outputs.db == 'true'
+        run: |
+          supabase db push --dry-run --password "$SUPABASE_DB_PASSWORD"
+          supabase db push --password "$SUPABASE_DB_PASSWORD"
+          git tag -f deployed/db "$DEPLOY_SHA" && git push -f origin refs/tags/deployed/db
+
+      - name: 2. Edge Functions
+        if: steps.supabase.outputs.ready == 'true' && steps.changes.outputs.functions == 'true' && hashFiles('supabase/functions/*/index.ts') != ''
+        run: |
+          supabase functions deploy --use-api --project-ref "$SUPABASE_PROJECT_REF"
+          git tag -f deployed/functions "$DEPLOY_SHA" && git push -f origin refs/tags/deployed/functions
+
+      - name: Check web deploy
+        id: web
+        run: |
+          if [ ! -f apps/web/package.json ] || [ "${{ steps.changes.outputs.web }}" != "true" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ vars.WEB_DEPLOY_ENABLED }}" = "false" ]; then
+            echo "::warning::WEB_DEPLOY_ENABLED=false — web deploy paused to save Netlify credits."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          elif [ -z "$NETLIFY_AUTH_TOKEN" ] || [ -z "$NETLIFY_SITE_ID" ]; then
+            echo "::warning::Netlify secrets not set — skipping web deploy."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@v4
+        if: steps.web.outputs.ready == 'true'
+      - uses: actions/setup-node@v5
+        if: steps.web.outputs.ready == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: 3. Web (Netlify)
+        if: steps.web.outputs.ready == 'true'
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @news-coming/web build
+          pnpm dlx netlify-cli deploy --prod --dir apps/web/dist --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN"
+          git tag -f deployed/web "$DEPLOY_SHA" && git push -f origin refs/tags/deployed/web
+
+      - name: 4. Move prod tag (worker runs from it)
+        run: |
+          pending=""
+          is_current() { [ "$(git rev-parse -q --verify "refs/tags/$1" 2>/dev/null)" = "$DEPLOY_SHA" ]; }
+          if [ "${{ steps.changes.outputs.db }}" = "true" ] && ! is_current deployed/db; then
+            pending="$pending db"
+          fi
+          if [ "${{ steps.changes.outputs.functions }}" = "true" ] && ! is_current deployed/functions && [ -n "$(ls supabase/functions/*/index.ts 2>/dev/null)" ]; then
+            pending="$pending functions"
+          fi
+          if [ -n "$pending" ]; then
+            echo "::warning::Not moving prod: pending deploy of$pending."
+            exit 0
+          fi
+          git tag -f prod "$DEPLOY_SHA"
+          git push -f origin refs/tags/prod
