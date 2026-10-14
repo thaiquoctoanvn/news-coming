@@ -124,7 +124,18 @@ Netlify (static SPA): chọn topic → Bản tin · Lịch · Biểu đồ · C�
 
 - Mỗi bước chỉ xử lý bản ghi ở trạng thái tương ứng → chạy lại an toàn. Hết quota → giữ trạng thái, lần sau chạy tiếp.
 - Mỗi request AI được kiểm tra với quota của provider **và** `topics.ai_daily_request_cap`, để một topic không ăn hết quota của topic khác.
-- Trạng thái: `raw → filtered_out | scored → selected → summarized → translated` (+ `failed`).
+- Trạng thái: `raw → filtered_out | duplicate | scored → selected → summarized → translated` (+ `failed`). `duplicate` = cùng câu chuyện đã có từ nguồn khác; chỉ giữ để không tải lại URL và để tăng `source_count` của bài đại diện.
+
+### 4.0 Bước thu thập (Phase 2, đã chạy thật)
+
+Code: `apps/worker/src/pipeline/collect.ts`. Chạy: `pnpm collect` (cần `.env`) hoặc `pnpm dry-run` (không cần DB: nạp cấu hình từ migration vào PGlite, lấy tin thật, giữ trong bộ nhớ).
+
+- Lọc từ khóa: khớp nguyên từ (cho phép đuôi số nhiều `s`/`es`), từ khóa kết thúc bằng `*` khớp tiền tố. `topics.settings.exclude_keywords` loại tin rác cho cả topic (trang giá, "price today"…). Nguồn chính thức (authority ≥ 10) luôn qua lọc.
+- Gom cụm: Jaccard trên từ khóa tiêu đề ≥ 0.5, so với cả tin trong 48h trước. Hai tin cùng nguồn và cùng publisher không bao giờ gộp (ví dụ hai hồ sơ 8-K khác nhau).
+- `articles.authority`: tin từ Google News / GDELT lấy theo domain của báo gốc (cơ quan nhà nước +10, Reuters/Bloomberg/WSJ/FT/AP/Nikkei +5).
+- Bỏ tin cũ hơn 36h; tối đa 50 tin mỗi nguồn.
+- Dry run ngày 2026-10-14: 801 tin → 237 quá cũ, 122 bị lọc, 28 trùng, **405 tin mới chờ chấm điểm**; chạy lại lần 2: 0 tin mới.
+- **Hệ quả cho Phase 3:** ~400 tin/lần chạy đầu tiên (các lần sau ít hơn vì chỉ có tin mới) — Phase 3 cần xếp hạng sơ bộ bằng code (authority, `source_count`, độ mới, giới hạn theo category) và chỉ gửi top ~150 tiêu đề cho AI để giữ ≤ 6 request chấm điểm/lần.
 
 ### 4.1 Output chấm điểm của Model A
 

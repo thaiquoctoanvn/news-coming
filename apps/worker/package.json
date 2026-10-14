@@ -4,6 +4,16 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p .",
-    "verify:sources": "node scripts/verify-sources.ts"
+    "collect": "node --env-file-if-exists=../../.env src/index.ts collect",
+    "dry-run": "node scripts/dry-run.ts",
+    "verify:sources": "node --env-file-if-exists=../../.env scripts/verify-sources.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.3",
+    "fast-xml-parser": "^5.11.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.9"
   }
 }
