@@ -12,7 +12,9 @@
     "verify:sources": "pnpm --filter @news-coming/worker verify:sources",
     "db:start": "supabase start",
     "db:reset": "supabase db reset",
-    "db:test": "supabase test db"
+    "db:test": "supabase test db",
+    "collect": "pnpm --filter @news-coming/worker collect",
+    "dry-run": "pnpm --filter @news-coming/worker dry-run"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

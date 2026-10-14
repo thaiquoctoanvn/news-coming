@@ -32,7 +32,7 @@
 
 ## Project Snapshot
 
-- **Status:** Phase 1 — schema/RLS/seed migrations, source verification script and CI/deploy workflows exist; no worker pipeline or web yet. The source of truth is `@docs/DESIGN.md`.
+- **Status:** Phase 2 — collect pipeline (fetch, normalize, keyword filter, clustering → `articles`) in `apps/worker`, run manually via `.github/workflows/run.yml`; no AI scoring or web yet. The source of truth is `@docs/DESIGN.md`.
 - **Stack (planned):** TypeScript everywhere; pnpm monorepo; web = Vite + React SPA + HeroUI v3 + Tailwind v4 + TanStack Query + react-hook-form + zod; worker = Node 24 running `.ts` directly (type stripping, `erasableSyntaxOnly`) on GitHub Actions; Supabase (Postgres, RLS, Auth email OTP via Resend, Edge Functions on Deno, pg_cron, Realtime); Netlify static hosting.
 - **Architecture:** topic is the top-level unit (categories, entities, sources, slots, editions, data modules all belong to a topic). Layout: `apps/web`, `apps/worker`, `supabase/{migrations,seed,functions}`, shared core in `supabase/functions/_shared/` (fetch-only TS used by both worker and Edge Functions).
 - **Data layer:** web talks to Supabase directly with the anon key + RLS (no custom API layer); worker uses the service_role key; AI providers (Groq for scoring/summary, Gemini for translation, with fallbacks) are configured in DB tables.
