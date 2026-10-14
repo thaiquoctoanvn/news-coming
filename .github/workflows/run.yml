@@ -30,6 +30,12 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: prod
+      - name: Check prod tag has the worker
+        run: |
+          if [ ! -f apps/worker/src/index.ts ]; then
+            echo "::error::The prod tag ($(git rev-parse --short HEAD)) has no worker code yet. Wait for the Deploy workflow on main to finish, then run again."
+            exit 1
+          fi
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
