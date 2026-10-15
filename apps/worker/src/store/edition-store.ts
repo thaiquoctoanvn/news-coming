@@ -1,10 +1,5 @@
-import type { AiProvider, PinRule, SelectedItem, SlotConfig, UsageStore } from '../shared.ts';
+import type { AiProvider, PinRule, PromptRef, SelectedItem, SlotConfig, UsageStore } from '../shared.ts';
 import type { ArticlePatch, ArticleRow, ArticleStatus } from '../types.ts';
-
-export interface NamedRef {
-  readonly id: string;
-  readonly name: string;
-}
 
 export interface EditionConfig {
   readonly topic: {
@@ -13,6 +8,8 @@ export interface EditionConfig {
     readonly scoringGuide: string;
     readonly aiDailyRequestCap: number;
     readonly pin: PinRule | null;
+    /** Target English summary length (topics.settings.summary_words). */
+    readonly summaryWords: number;
   };
   readonly edition: {
     readonly id: string;
@@ -20,9 +17,9 @@ export interface EditionConfig {
     readonly sizeMax: number;
   };
   readonly slots: readonly SlotConfig[];
-  readonly categories: readonly NamedRef[];
-  readonly entities: readonly NamedRef[];
-  readonly modules: readonly NamedRef[];
+  readonly categories: readonly PromptRef[];
+  readonly entities: readonly PromptRef[];
+  readonly modules: readonly PromptRef[];
 }
 
 export interface ArticleQuery {
@@ -49,6 +46,6 @@ export interface EditionStore extends UsageStore {
   addDigestItems(digestId: string, items: readonly SelectedItem[]): Promise<void>;
   loadArticles(topicId: string, query: ArticleQuery): Promise<ArticleRow[]>;
   updateArticle(id: string, patch: ArticlePatch): Promise<void>;
-  /** URLs of other outlets reporting the same story, for when the main one is paywalled. */
-  loadClusterUrls(topicId: string, clusterKey: string, excludeId: string): Promise<string[]>;
+  /** Other outlets' articles about the same story (to replace an unreadable one as a whole). */
+  loadClusterMembers(topicId: string, clusterKey: string, excludeId: string): Promise<ArticleRow[]>;
 }

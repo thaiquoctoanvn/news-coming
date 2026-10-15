@@ -14,6 +14,7 @@ Project-specific rules (not from ecc):
 | File | Purpose |
 |---|---|
 | `cost.md` | **Hard rule** — zero cost, no paid services without user approval |
+| `content-integrity.md` | **Hard rule** — summaries and translations faithful to the source, never invented |
 | `PRONOUNS.md` | How to address the user in Vietnamese |
 
 ## Not taken

@@ -73,8 +73,8 @@ export class MemoryEditionStore implements EditionStore {
     this.patches.set(id, { ...this.patches.get(id), ...patch });
   }
 
-  async loadClusterUrls(topicId: string, clusterKey: string, excludeId: string): Promise<string[]> {
-    return this.rows().filter((a) => a.topicId === topicId && a.clusterKey === clusterKey && a.id !== excludeId).map((a) => a.url);
+  async loadClusterMembers(topicId: string, clusterKey: string, excludeId: string): Promise<ArticleRow[]> {
+    return this.rows().filter((a) => a.topicId === topicId && a.clusterKey === clusterKey && a.id !== excludeId);
   }
 
   /** Articles with all patches applied. */
@@ -85,7 +85,7 @@ export class MemoryEditionStore implements EditionStore {
         id: a.id, topicId: a.topicId, url: a.url, sourceName: a.sourceName, title: a.title, description: a.description,
         status: a.status, categoryId: a.categoryId, entityId: a.entityId, authority: a.authority, sourceCount: a.sourceCount,
         clusterKey: a.clusterKey, publishedAt: a.publishedAt, fetchedAt: a.fetchedAt, impact: null, direction: null,
-        explains: null, finalScore: null, summaryEn: null, ...patch,
+        explains: null, finalScore: null, storyKey: null, contentSnippet: null, summaryEn: null, ...patch,
       } as ArticleRow & ArticlePatch;
     });
   }

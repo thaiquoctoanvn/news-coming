@@ -43,6 +43,7 @@
 ## Hard Rules (always apply)
 
 - When replying to the user in Vietnamese, refer to yourself as **"em"** and address the user as **"đại ca"**. (`@.agents/rules/PRONOUNS.md`)
+- **Faithful content:** summaries use only facts from the article's own text (no outside knowledge, speculation or invented numbers); a title is never paired with another article's text; translations add nothing. Items failing the automatic checks are never published. (`@.agents/rules/content-integrity.md`)
 - **Zero cost:** never use, enable, or upgrade to any paid service, plan, model, or add-on, and never add billing or a payment method. Adding any new external service — even a free one — requires asking the user first. When unsure whether something costs money, stop and ask. (`@.agents/rules/cost.md`)
 - Never commit secrets; the repo is public. Secrets live only in GitHub Secrets/Environments and Supabase Secrets/Vault.
 - All changes go through a PR into `main`; never push directly to `main`.
@@ -58,6 +59,7 @@
 |---|---|
 | `@.agents/rules/README.md` | Unsure which rules apply; a rule seems to conflict with the design (session storage, CSP, CSRF, DB rules); adding or removing rule files |
 | `@.agents/rules/PRONOUNS.md` | Writing any chat reply in Vietnamese |
+| `@.agents/rules/content-integrity.md` | Changing summary/translation prompts, article reading (Jina), selection/substitution of articles, faithfulness checks, or anything that decides what text gets published |
 | `@.agents/rules/cost.md` | Adding a dependency, external service, API, AI model or provider; changing schedules, AI call volume, deploy frequency or storage; any setup step mentioning billing, credit card or pricing |
 | `@.agents/rules/common/coding-style.md` | Writing or refactoring any code: immutability, KISS/DRY/YAGNI, file size limits, error handling, input validation, naming |
 | `@.agents/rules/common/security.md` | Touching auth, OTP, RLS, secrets/env vars, user input, rate limiting, error messages; before any commit |

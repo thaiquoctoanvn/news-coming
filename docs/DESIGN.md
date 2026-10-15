@@ -276,9 +276,15 @@ Hạn mức free đọc từ Groq console và Google AI Studio ngày 2026-10-15,
 1. Thu thập (§4.0).
 2. Cửa sổ: từ `window_end` của digest gần nhất (hoặc 24h trước) tới hiện tại.
 3. Xếp hạng sơ bộ bằng code → tối đa 150 tin, ≤ 30 tin/category → chấm điểm theo lô 25 → `scored` + `final_score`.
-4. Chọn tin theo slot (`supabase/functions/_shared/selection.ts`) → tạo `digests` + `digest_items`, tin được chọn → `selected`. Mỗi edition chỉ tạo digest 1 lần/ngày; chạy lại chỉ làm nốt việc dang dở.
-5. Nội dung: giải mã link Google News ra link gốc → Readability. Bị chặn (Reuters/WSJ trả 401) → thử bài của báo khác trong cùng cụm → cuối cùng dùng tiêu đề + mô tả. Lưu `content_snippet`, `original_url`.
-6. Tóm tắt tiếng Anh theo lô 3 → `summarized`; dịch theo lô 6 → `translated` (lúc này web public mới thấy).
+4. Chọn tin theo slot (`supabase/functions/_shared/selection.ts`): **mỗi sự kiện chỉ 1 tin** — AI trả `story` (slug sự kiện, ví dụ `us-cpi-sep-2026`) khi chấm điểm, lưu ở `articles.story_key`; tin cùng `story_key` với tin đã chọn bị bỏ qua. Mỗi edition chỉ tạo digest 1 lần/ngày; chạy lại chỉ làm nốt việc dang dở.
+5. **Đọc bài (Jina Reader, `r.jina.ai`, free ~20 request/phút, đã được duyệt ngày 2026-10-15):** link Google News được giải mã ra link gốc trước (Jina từ chối link Google News); các báo paywall (Reuters, WSJ, Bloomberg, FT…) bỏ qua luôn vì không đọc được. **Tiêu đề và nội dung luôn của cùng một bài**: tin không đọc được thì được thay *nguyên bài* bằng bài của báo khác trong cùng cụm (lấy tiêu đề, link, nguồn của bài đó; giữ điểm của tin gốc), không có bài thay thì bỏ tin đó và slot lấy ứng viên kế tiếp (tối đa 5 vòng chọn lại). Lưu `content_snippet`, `original_url`.
+6. **Trung thực là rule cứng** (`.agents/rules/content-integrity.md`): prompt cấm dùng kiến thức ngoài, suy đoán, bịa số/trích dẫn; tác động/triển vọng chỉ nêu khi bài gốc nói. Kiểm tra bằng code (`_shared/faithfulness.ts`, 0 token): mọi con số trong tóm tắt phải có trong bài gốc, mọi con số trong bản dịch phải có trong tóm tắt tiếng Anh. Sai → làm lại 1 lần; vẫn sai → `failed`, không đăng (đếm trong `stats.rejected`).
+   Tóm tắt tiếng Anh dài ~`topics.settings.summary_words` từ (mặc định 350 ≈ 3 phút đọc sau khi dịch), 3–5 đoạn, theo lô 2 bài → `summarized`. Bài gốc ngắn thì tóm tắt ngắn theo, không thêm chi tiết.
+7. Dịch theo lô 3 → `translated` (lúc này web public mới thấy). Bản dịch có từ Latin ≥ 7 ký tự không có trong bản gốc (dấu hiệu dính chữ, ví dụ "trongani") được dịch lại riêng 1 lần.
+
+Danh mục có thêm `categories.description_en` (gợi ý tiếng Anh cho AI, ví dụ `treasury` = hoạt động của Bộ Tài chính Mỹ, *không phải* lợi suất). Tên nguồn dạng "Tiêu đề trang | OilPrice.com" được rút gọn còn "OilPrice.com".
+
+Ước tính một bản tin sáng: ~6 request chấm điểm + ~6 request tóm tắt (Groq, giới hạn 8K token/phút → ~12–15 phút chạy) + ~4 request dịch (Gemini); ~100K token Groq/ngày cho 2 edition, dưới mức 80% của 200K.
 
 ---
 
