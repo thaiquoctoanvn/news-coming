@@ -1,4 +1,4 @@
-import type { ClusterHead, CollectStats, NewArticle, RunStatus, RunTrigger, SourceCountUpdate, TopicConfig } from '../types.ts';
+import type { ClusterHead, NewArticle, RunStatus, RunTrigger, SourceCountUpdate, TopicConfig } from '../types.ts';
 
 export interface RunStart {
   readonly topicId: string;
@@ -8,7 +8,8 @@ export interface RunStart {
 
 export interface RunFinish {
   readonly status: RunStatus;
-  readonly stats: CollectStats | Readonly<Record<string, unknown>>;
+  /** JSON-serializable run statistics stored in crawl_runs.stats. */
+  readonly stats: object;
   readonly error: string | null;
 }
 

@@ -1,7 +1,7 @@
 -- RLS / grants contract (docs/DESIGN.md §10.1). Run with: supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(15);
 
 -- ===== Public visitor =====
 set local role anon;
@@ -18,6 +18,10 @@ select throws_ok($$ select title from public.articles $$, '42501', null, 'anon c
 select throws_ok(
   $$ insert into public.topics (id, name_vi, scoring_guide) values ('x', 'x', 'x') $$,
   '42501', null, 'anon cannot create topics'
+);
+select throws_ok(
+  $$ select public.record_ai_usage('groq-gpt-oss-120b', 'macro_finance', current_date, 1, 1) $$,
+  '42501', null, 'anon cannot write AI usage'
 );
 
 -- ===== Disabled topic disappears for the public =====

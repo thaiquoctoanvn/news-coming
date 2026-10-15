@@ -58,7 +58,7 @@ export async function collectTopic(options: CollectOptions): Promise<CollectResu
 
   const runId = await store.startRun({ topicId, editionId: options.editionId, trigger: options.trigger });
   try {
-    const stats = await collect(config, options);
+    const stats = await collectItems(config, options);
     const status: RunStatus = stats.sourceErrors.length === 0 ? 'success' : 'partial';
     await store.finishRun(runId, { status, stats, error: null });
     log.info('collect finished', { topicId, status, ...stats, sourceErrors: stats.sourceErrors.length });
@@ -69,7 +69,8 @@ export async function collectTopic(options: CollectOptions): Promise<CollectResu
   }
 }
 
-async function collect(config: TopicConfig, options: CollectOptions): Promise<CollectStats> {
+/** Fetch → filter → cluster → insert for one topic, inside a run started by the caller. */
+export async function collectItems(config: TopicConfig, options: Pick<CollectOptions, 'store' | 'fetchSource' | 'now'>): Promise<CollectStats> {
   const { store } = options;
   const now = options.now ?? new Date();
   const { candidates, sourceErrors } = await fetchAll(config.sources, options, now);
@@ -112,7 +113,7 @@ async function collect(config: TopicConfig, options: CollectOptions): Promise<Co
   };
 }
 
-async function fetchAll(sources: readonly Source[], options: CollectOptions, now: Date) {
+async function fetchAll(sources: readonly Source[], options: Pick<CollectOptions, 'store' | 'fetchSource'>, now: Date) {
   const sourceErrors: { source: string; error: string }[] = [];
   const perSource = await mapLimit(sources, FETCH_CONCURRENCY, async (source) => {
     try {

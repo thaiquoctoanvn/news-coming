@@ -1,5 +1,6 @@
 export type SourceKind = 'rss' | 'google_news' | 'edgar' | 'gdelt' | 'html' | 'json';
-export type ArticleStatus = 'raw' | 'filtered_out' | 'duplicate';
+export type NewArticleStatus = 'raw' | 'filtered_out' | 'duplicate';
+export type ArticleStatus = NewArticleStatus | 'scored' | 'selected' | 'summarized' | 'translated' | 'failed';
 export type RunTrigger = 'schedule' | 'manual' | 'backup';
 export type RunStatus = 'success' | 'partial' | 'failed';
 
@@ -68,7 +69,7 @@ export interface NewArticle {
   readonly title: string;
   readonly description: string | null;
   readonly publishedAt: Date | null;
-  readonly status: ArticleStatus;
+  readonly status: NewArticleStatus;
   readonly categoryId: string | null;
   readonly entityId: string | null;
   readonly authority: number;
@@ -90,4 +91,45 @@ export interface CollectStats {
   /** New articles waiting for AI scoring (status 'raw'). */
   readonly inserted: number;
   readonly sourceErrors: readonly { readonly source: string; readonly error: string }[];
+}
+
+/** Stored article as read by the edition pipeline. */
+export interface ArticleRow {
+  readonly id: string;
+  readonly topicId: string;
+  readonly url: string;
+  readonly sourceName: string;
+  readonly title: string;
+  readonly description: string | null;
+  readonly status: ArticleStatus;
+  readonly categoryId: string | null;
+  readonly entityId: string | null;
+  readonly authority: number;
+  readonly sourceCount: number;
+  readonly clusterKey: string | null;
+  readonly publishedAt: Date | null;
+  readonly fetchedAt: Date;
+  readonly impact: number | null;
+  readonly direction: 'negative' | 'neutral' | 'positive' | null;
+  readonly explains: string | null;
+  readonly finalScore: number | null;
+  readonly summaryEn: string | null;
+}
+
+export interface ArticlePatch {
+  readonly status?: ArticleStatus;
+  readonly categoryId?: string | null;
+  readonly entityId?: string | null;
+  readonly impact?: number;
+  readonly direction?: 'negative' | 'neutral' | 'positive';
+  readonly explains?: string | null;
+  readonly aiReason?: string;
+  readonly finalScore?: number;
+  readonly scoredAt?: Date;
+  readonly contentSnippet?: string;
+  readonly originalUrl?: string | null;
+  readonly summaryEn?: string;
+  readonly titleVi?: string;
+  readonly summaryVi?: string;
+  readonly translatedAt?: Date;
 }

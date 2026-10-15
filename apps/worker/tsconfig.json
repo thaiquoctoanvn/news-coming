@@ -3,6 +3,7 @@
   "include": [
     "src",
     "scripts",
-    "test"
+    "test",
+    "../../supabase/functions/_shared"
   ]
 }

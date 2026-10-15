@@ -1,19 +1,25 @@
 name: Run worker
 
 # Runs the worker from the `prod` tag, i.e. code whose DB migrations are already deployed
-# (DESIGN.md §13). Phase 2: manual trigger only; scheduling arrives in Phase 4.
+# (DESIGN.md §13). Manual trigger for now; scheduling arrives in Phase 4.
 
 on:
   workflow_dispatch:
     inputs:
+      command:
+        description: edition = full digest (collect + AI); collect = fetch only; verify-ai = check AI keys and models
+        type: choice
+        options: [edition, collect, verify-ai]
+        default: edition
       topic:
         description: Topic id, or "all" for every enabled topic
         default: all
         required: true
       edition:
-        description: Edition id (optional, e.g. morning or pre_us)
-        default: ''
-        required: false
+        description: Edition id (required for "edition")
+        type: choice
+        options: [morning, pre_us]
+        default: morning
 
 permissions:
   contents: read
@@ -23,25 +29,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  collect:
+  run:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # AI calls wait for free-tier per-minute windows, so an edition can take several minutes.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
         with:
           ref: prod
+      - name: Check prod tag has the worker
+        run: |
+          if [ ! -f apps/worker/src/index.ts ]; then
+            echo "::error::The prod tag ($(git rev-parse --short HEAD)) has no worker code yet. Wait for the Deploy workflow on main to finish, then run again."
+            exit 1
+          fi
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - run: pnpm install --frozen-lockfile --filter @news-coming/worker
-      - name: Collect news
+      - run: pnpm install --frozen-lockfile
+      - name: Run ${{ inputs.command }}
         working-directory: apps/worker
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          COMMAND: ${{ inputs.command }}
           TOPIC: ${{ inputs.topic }}
           EDITION: ${{ inputs.edition }}
-        run: node src/index.ts collect --topic "$TOPIC" --trigger manual ${EDITION:+--edition "$EDITION"}
+        run: |
+          case "$COMMAND" in
+            edition) node src/index.ts edition --topic "$TOPIC" --edition "$EDITION" --trigger manual ;;
+            collect) node src/index.ts collect --topic "$TOPIC" --trigger manual ;;
+            verify-ai) node src/index.ts verify-ai ;;
+          esac
