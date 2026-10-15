@@ -4,6 +4,7 @@
 export * from '../../../supabase/functions/_shared/ai/providers.ts';
 export * from '../../../supabase/functions/_shared/ai/router.ts';
 export * from '../../../supabase/functions/_shared/content.ts';
+export * from '../../../supabase/functions/_shared/faithfulness.ts';
 export * from '../../../supabase/functions/_shared/prompts.ts';
 export * from '../../../supabase/functions/_shared/scoring.ts';
 export * from '../../../supabase/functions/_shared/selection.ts';

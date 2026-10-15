@@ -90,13 +90,20 @@ export const summarySchema = z.object({
   items: z.array(z.object({ id: z.coerce.string(), summary: z.string().min(1) })),
 });
 
-/** `targetWords`: summary length for a normal article (~3 minutes of reading once translated). */
-export function summaryPrompt(items: readonly SummaryInput[], targetWords: number): ChatRequest {
+/**
+ * `targetWords`: summary length for a normal article (~3 minutes of reading once translated).
+ * `feedback`: on a retry, what the previous attempt got wrong.
+ * Faithfulness rules: .agents/rules/content-integrity.md.
+ */
+export function summaryPrompt(items: readonly SummaryInput[], targetWords: number, feedback?: string): ChatRequest {
   const system = [
     'You summarize financial news articles in English for a market digest read by Vietnamese investors.',
-    `For each article write about ${targetWords} words in 3-5 short paragraphs (separate paragraphs with a blank line):`,
-    'what happened, the key numbers and quotes, why it matters for markets, and what to watch next.',
-    'Use only facts from the given text. If the text is short, write a proportionally shorter summary — never invent details.',
+    'STRICT RULE: the summary must be faithful to the article text. Use ONLY facts stated in the text below each title.',
+    'Do not add outside knowledge, background, assumptions, speculation, or your own analysis. Do not invent numbers, quotes, names, dates or causes.',
+    'Copy numbers, percentages, prices, dates and quotes exactly as written in the text.',
+    'Mention market impact, outlook or what to watch ONLY if the text itself says so, and attribute it (e.g. "analysts at X expect...").',
+    `Length: about ${targetWords} words in 3-5 short paragraphs separated by a blank line. If the text is short, write a proportionally shorter summary — never pad.`,
+    ...(feedback ? [`Your previous summary broke the rule: ${feedback}. Rewrite it using only the text.`] : []),
     'Answer with JSON only: {"items":[{"id":"1","summary":"..."}]}',
   ].join('\n');
   const user = items
@@ -125,6 +132,7 @@ export function translationPrompt(items: readonly TranslationInput[]): ChatReque
     'basis points → điểm cơ bản; rate cut/hike → cắt giảm/tăng lãi suất; stablecoin, ETF, token hóa (tokenization) giữ nguyên.',
     'Keep the paragraph breaks of the summary. Every word must be proper Vietnamese or an unchanged proper name/ticker:',
     'never leave English words untranslated and never glue an English word to a Vietnamese one.',
+    'STRICT RULE: translate faithfully — add nothing, drop nothing, change no number, date or name. Write numbers with digits exactly as in the English.',
     'Answer with JSON only: {"items":[{"id":"1","title_vi":"...","summary_vi":"..."}]}',
   ].join('\n');
   const user = JSON.stringify(items.map((i) => ({ id: i.id, title: i.title, summary: i.summary })));

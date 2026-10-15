@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { describe, expect, test } from 'vitest';
 import {
   type AiProvider, AiRouter, AiUnavailableError, type UsageStore, type UsageTotals, articleTextFromJina, isGoogleNewsUrl, isPaywalled,
-  normalizeStoryKey, parseBatchExecuteUrl, scoringSchema, suspiciousTranslationWords,
+  normalizeStoryKey, parseBatchExecuteUrl, scoringSchema, suspiciousTranslationWords, unsupportedNumbers,
 } from '../src/shared.ts';
 import { parseModelJson } from '../../../supabase/functions/_shared/ai/json.ts';
 
@@ -170,5 +170,21 @@ describe('story keys and translation checks', () => {
 
     expect(suspiciousTranslationWords('BMNR tăng khoảng 2% trongani giao dịch trước giờ mở cửa', english)).toEqual(['trongani']);
     expect(suspiciousTranslationWords('Ethereum vượt 2.000 $, cổ phiếu BMNR tăng', english)).toEqual([]);
+  });
+});
+
+describe('faithfulness checks', () => {
+  test('accepts numbers taken from the source, including reformatted ones', () => {
+    const source = 'Strategy bought 250 bitcoin for $21.5 million, bringing holdings to 848,250 BTC on September 14.';
+
+    expect(unsupportedNumbers('Strategy mua 250 BTC với giá 21,5 triệu $, nâng tổng lên 848.250 BTC ngày 14/9.', source)).toEqual([]);
+  });
+
+  test('reports numbers the output invented', () => {
+    expect(unsupportedNumbers('Gold rose 1.1% to $4,151 on Thursday', 'Gold rose 1.1% on Thursday')).toEqual(['4', '151']);
+  });
+
+  test('allows digits for spelled-out numbers, ordinals and months', () => {
+    expect(unsupportedNumbers('Lợi nhuận quý 3 tăng gấp 2 lần trong tháng 10', 'Third-quarter profit doubled to two times in October')).toEqual([]);
   });
 });

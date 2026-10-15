@@ -185,7 +185,7 @@ const PATCH_COLUMNS: Record<keyof ArticlePatch, string> = {
   status: 'status', categoryId: 'category_id', entityId: 'entity_id', impact: 'impact', direction: 'direction',
   explains: 'explains', aiReason: 'ai_reason', finalScore: 'final_score', storyKey: 'story_key', scoredAt: 'scored_at',
   contentSnippet: 'content_snippet', originalUrl: 'original_url', summaryEn: 'summary_en', titleVi: 'title_vi',
-  summaryVi: 'summary_vi', translatedAt: 'translated_at',
+  summaryVi: 'summary_vi', translatedAt: 'translated_at', error: 'error',
 };
 
 function toPatchRow(patch: ArticlePatch): Record<string, unknown> {

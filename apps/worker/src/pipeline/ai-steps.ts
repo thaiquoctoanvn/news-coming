@@ -1,7 +1,7 @@
 import { log } from '../log.ts';
 import {
   type AiRouter, type PromptTopic, finalScore, preRank, scoringPrompt, scoringSchema, summaryPrompt, summarySchema,
-  suspiciousTranslationWords, translationPrompt, translationSchema,
+  suspiciousTranslationWords, translationPrompt, translationSchema, unsupportedNumbers,
 } from '../shared.ts';
 import type { EditionStore } from '../store/edition-store.ts';
 import type { ArticleRow } from '../types.ts';
@@ -59,40 +59,80 @@ export async function scoreArticles(ctx: StepContext, raw: readonly ArticleRow[]
   return scored;
 }
 
-/** Summarizes selected articles from their own text; returns how many were summarized. */
-export async function summarizeArticles(ctx: StepContext, articles: readonly ArticleRow[]): Promise<number> {
+/** Text the summary must stay faithful to: the article's own title and body. */
+function sourceText(a: ArticleRow): string {
+  return a.contentSnippet ?? [a.title, a.description].filter(Boolean).join('. ');
+}
+
+export interface StepCounts {
+  readonly done: number;
+  /** Items that failed a faithfulness check twice; marked failed and never published. */
+  readonly rejected: number;
+}
+
+/** Summarizes selected articles from their own text (content-integrity rules). */
+export async function summarizeArticles(ctx: StepContext, articles: readonly ArticleRow[]): Promise<StepCounts> {
   let done = 0;
+  let rejected = 0;
   for (const batch of batches(articles, SUMMARY_BATCH)) {
-    const request = summaryPrompt(batch.map((a, i) => ({
-      id: String(i + 1), title: a.title, publisher: a.sourceName,
-      text: a.contentSnippet ?? [a.title, a.description].filter(Boolean).join('. '),
-    })), ctx.topic.summaryWords);
-    const { data } = await ctx.router.complete('extract', request, summarySchema);
-    for (const result of data.items) {
-      const article = batch[Number(result.id) - 1];
-      if (!article) continue;
-      await ctx.store.updateArticle(article.id, { status: 'summarized', summaryEn: result.summary });
+    for (const [article, summary] of await summarizeBatch(ctx, batch)) {
+      let final = summary;
+      let invented = unsupportedNumbers(final, `${article.title} ${sourceText(article)}`);
+      if (invented.length > 0) {
+        const retry = await summarizeBatch(ctx, [article], `it contains numbers that are not in the text (${invented.join(', ')})`);
+        final = retry.get(article) ?? final;
+        invented = unsupportedNumbers(final, `${article.title} ${sourceText(article)}`);
+      }
+      if (invented.length > 0) {
+        rejected++;
+        log.warn('summary rejected: numbers not in source', { articleId: article.id, numbers: invented });
+        await ctx.store.updateArticle(article.id, { status: 'failed', error: `unfaithful summary: numbers ${invented.join(', ')} not in source` });
+        continue;
+      }
+      await ctx.store.updateArticle(article.id, { status: 'summarized', summaryEn: final });
       done++;
     }
   }
-  return done;
+  return { done, rejected };
 }
 
-export async function translateArticles(ctx: StepContext, articles: readonly ArticleRow[]): Promise<number> {
+async function summarizeBatch(ctx: StepContext, batch: readonly ArticleRow[], feedback?: string): Promise<Map<ArticleRow, string>> {
+  const request = summaryPrompt(batch.map((a, i) => ({
+    id: String(i + 1), title: a.title, publisher: a.sourceName, text: sourceText(a),
+  })), ctx.topic.summaryWords, feedback);
+  const { data } = await ctx.router.complete('extract', request, summarySchema);
+  const results = new Map<ArticleRow, string>();
+  for (const result of data.items) {
+    const article = batch[Number(result.id) - 1];
+    if (article) results.set(article, result.summary);
+  }
+  return results;
+}
+
+export async function translateArticles(ctx: StepContext, articles: readonly ArticleRow[]): Promise<StepCounts> {
   let done = 0;
+  let rejected = 0;
   for (const batch of batches(articles, TRANSLATION_BATCH)) {
-    const results = await translateBatch(ctx, batch);
-    for (const [article, result] of results) {
-      // A garbled output ("trongani") gets one more try on its own.
-      const final = isGarbled(article, result) ? (await translateBatch(ctx, [article])).get(article) ?? result : result;
-      if (isGarbled(article, final)) log.warn('translation still has suspicious words', { articleId: article.id });
+    for (const [article, result] of await translateBatch(ctx, batch)) {
+      // A translation with altered numbers or garbled words gets one more try on its own.
+      const first = translationProblems(article, result);
+      const needsRetry = first.numbers.length > 0 || first.garbled.length > 0;
+      const final = needsRetry ? (await translateBatch(ctx, [article])).get(article) ?? result : result;
+      const problems = translationProblems(article, final);
+      if (problems.numbers.length > 0) {
+        rejected++;
+        log.warn('translation rejected: numbers not in summary', { articleId: article.id, numbers: problems.numbers });
+        await ctx.store.updateArticle(article.id, { status: 'failed', error: `unfaithful translation: numbers ${problems.numbers.join(', ')}` });
+        continue;
+      }
+      if (problems.garbled.length > 0) log.warn('translation still has suspicious words', { articleId: article.id, words: problems.garbled });
       await ctx.store.updateArticle(article.id, {
         status: 'translated', titleVi: final.title_vi, summaryVi: final.summary_vi, translatedAt: ctx.now,
       });
       done++;
     }
   }
-  return done;
+  return { done, rejected };
 }
 
 interface Translation {
@@ -112,7 +152,8 @@ async function translateBatch(ctx: StepContext, batch: readonly ArticleRow[]): P
   return results;
 }
 
-function isGarbled(article: ArticleRow, t: Translation): boolean {
-  const source = `${article.title} ${article.summaryEn ?? ''}`;
-  return suspiciousTranslationWords(`${t.title_vi} ${t.summary_vi}`, source).length > 0;
+function translationProblems(article: ArticleRow, t: Translation): { numbers: string[]; garbled: string[] } {
+  const english = `${article.title} ${article.summaryEn ?? ''}`;
+  const vietnamese = `${t.title_vi} ${t.summary_vi}`;
+  return { numbers: unsupportedNumbers(vietnamese, english), garbled: suspiciousTranslationWords(vietnamese, english) };
 }

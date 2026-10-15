@@ -56,7 +56,7 @@ const items: RawItem[] = [
 ];
 
 // Fake AI and Jina: scores by keyword, summarizes and translates deterministically.
-function fakeServices(options: { translateStatus?: number; unreadable?: readonly string[] } = {}) {
+function fakeServices(options: { translateStatus?: number; unreadable?: readonly string[]; inventNumbers?: boolean } = {}) {
   const calls: string[] = [];
   const fetchImpl = async (url: string, init: RequestInit): Promise<Response> => {
     if (url.startsWith('https://r.jina.ai/')) {
@@ -69,7 +69,7 @@ function fakeServices(options: { translateStatus?: number; unreadable?: readonly
       const [system, user] = (body.messages as { content: string }[]).map((m) => m.content);
       const isScoring = system!.includes('score');
       calls.push(isScoring ? 'score' : 'summary');
-      const content = isScoring ? scoreAnswer(user!) : summaryAnswer(user!);
+      const content = isScoring ? scoreAnswer(user!) : summaryAnswer(user!, options.inventNumbers ?? false);
       return Response.json({ choices: [{ message: { content } }], usage: { prompt_tokens: 10, completion_tokens: 10 } });
     }
     calls.push('translate');
@@ -94,9 +94,10 @@ function scoreAnswer(user: string): string {
   return JSON.stringify({ items: scored });
 }
 
-function summaryAnswer(user: string): string {
+function summaryAnswer(user: string, inventNumbers: boolean): string {
   const ids = [...user.matchAll(/^### (\d+)$/gm)].map((m) => m[1]);
-  return JSON.stringify({ items: ids.map((id) => ({ id, summary: `Summary ${id}` })) });
+  const summary = inventNumbers ? 'Prices jumped 42% overnight.' : 'Prices moved sharply as traders reacted to supply news.';
+  return JSON.stringify({ items: ids.map((id) => ({ id, summary })) });
 }
 
 function setup(services = fakeServices(), sourceItems: readonly RawItem[] = items) {
@@ -158,6 +159,20 @@ describe('runEdition', () => {
     expect(digestTitles(editionStore)).toEqual([
       'Oil supply shock as tankers attacked', 'Fed signals rate cut path', 'Fed official speaks about inflation',
     ]);
+  });
+
+  test('a summary with numbers that are not in the article is retried once, then rejected and never published', async () => {
+    const services = fakeServices({ inventNumbers: true });
+    const { editionStore, run } = setup(services);
+
+    const result = await run();
+
+    expect(result.stats).toMatchObject({ selected: 3, summarized: 0, translated: 0, rejected: 3 });
+    expect(services.calls.filter((c) => c === 'summary')).toHaveLength(2 + 3); // 2 batches + 1 retry per article
+    expect(services.calls).not.toContain('translate');
+    const failed = editionStore.rows().filter((a) => a.status === 'failed');
+    expect(failed).toHaveLength(3);
+    expect(failed[0]?.error).toBe('unfaithful summary: numbers 42 not in source');
   });
 
   test('stops at the translation quota, then finishes pending work on the next run', async () => {

@@ -36,6 +36,8 @@ export interface EditionStats {
   readonly dropped: number;
   readonly summarized: number;
   readonly translated: number;
+  /** Items that failed a faithfulness check and were not published. */
+  readonly rejected: number;
   readonly aiStopped: string | null;
 }
 
@@ -90,13 +92,15 @@ async function processEdition(config: EditionConfig, options: EditionOptions, no
   };
   const reader = new ArticleReader({ fetchImpl, ...sleep });
   const windowStart = (await store.lastDigestWindowEnd(config.topic.id)) ?? new Date(now.getTime() - DEFAULT_WINDOW_HOURS * HOUR_MS);
-  let counts = { scored: 0, selected: 0, replaced: 0, dropped: 0, summarized: 0, translated: 0 };
+  let counts = { scored: 0, selected: 0, replaced: 0, dropped: 0, summarized: 0, translated: 0, rejected: 0 };
 
   try {
     counts.scored = await scoreArticles(ctx, await store.loadArticles(config.topic.id, { statuses: ['raw'], fetchedSince: windowStart }));
     counts = { ...counts, ...(await selectEdition(config, store, reader, windowStart, now)) };
-    counts.summarized = await summarizeArticles(ctx, await store.loadArticles(config.topic.id, { statuses: ['selected'] }));
-    counts.translated = await translateArticles(ctx, await store.loadArticles(config.topic.id, { statuses: ['summarized'] }));
+    const summaries = await summarizeArticles(ctx, await store.loadArticles(config.topic.id, { statuses: ['selected'] }));
+    counts = { ...counts, summarized: summaries.done, rejected: summaries.rejected };
+    const translations = await translateArticles(ctx, await store.loadArticles(config.topic.id, { statuses: ['summarized'] }));
+    counts = { ...counts, translated: translations.done, rejected: counts.rejected + translations.rejected };
   } catch (error: unknown) {
     if (!(error instanceof AiUnavailableError)) throw error;
     log.warn('AI unavailable, remaining work left for the next run', { error: error.message });

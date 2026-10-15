@@ -135,4 +135,5 @@ export interface ArticlePatch {
   readonly titleVi?: string;
   readonly summaryVi?: string;
   readonly translatedAt?: Date;
+  readonly error?: string | null;
 }
