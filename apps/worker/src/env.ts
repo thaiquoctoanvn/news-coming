@@ -9,6 +9,8 @@ const envSchema = z.object({
     .string()
     .regex(/\S+@\S+\.\S+/, 'must contain a contact email (SEC requirement)')
     .optional(),
+  GROQ_API_KEY: z.string().min(10).optional(),
+  GEMINI_API_KEY: z.string().min(10).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -18,6 +20,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const result = envSchema.safeParse({
     ...source,
     SEC_USER_AGENT: source.SEC_USER_AGENT || undefined,
+    GROQ_API_KEY: source.GROQ_API_KEY || undefined,
+    GEMINI_API_KEY: source.GEMINI_API_KEY || undefined,
   });
   if (!result.success) {
     const problems = result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');

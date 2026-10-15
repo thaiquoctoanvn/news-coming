@@ -252,15 +252,33 @@ Query Google News khởi điểm (mỗi query là 1 source):
 
 ## 8. AI providers (dùng chung mọi topic)
 
-| Role | Chính | Fallback 1 | Fallback cuối |
-|---|---|---|---|
-| `extract` (chấm điểm, tóm tắt) | Groq (Llama / gpt-oss) | Cerebras / Mistral free | dừng, giữ `scored`, chạy tiếp lần sau |
-| `translate` | Gemini Flash / Flash-Lite | Cloudflare Workers AI | giữ bản EN, đánh dấu chờ dịch |
+Hạn mức free đọc từ Groq console và Google AI Studio ngày 2026-10-15, seed trong `supabase/migrations/20261015000200_ai.sql` (bảng `ai_providers`, sửa được không cần deploy). Model Llama không còn trong gói free của tài khoản này.
 
-- Model, thứ tự, `daily_request_limit`, `rpm_limit` trong `ai_providers`.
-- `ai_usage` đếm theo provider + topic + ngày; chạm 80% limit provider → chuyển provider kế tiếp; chạm `ai_daily_request_cap` của topic → topic đó dừng gọi AI trong ngày.
-- JSON output; retry exponential backoff khi 429/5xx.
-- Ước tính topic Vĩ mô / Tài chính: Sáng ~10 req, Trước phiên Mỹ ~7 req, mỗi "Xem thêm" +2 → < 40 req/ngày. Cap mặc định 60.
+| Role | Priority | Provider / model | RPM | TPM | RPD | Tokens/ngày |
+|---|---|---|---|---|---|---|
+| extract | 1 | Groq `openai/gpt-oss-120b` (`reasoning_effort: low`) | 30 | **8K** | 1K | 200K |
+| extract | 2 | Groq `qwen/qwen3.8-27b` | 30 | 8K | 1K | 200K |
+| extract | 3 | Groq `openai/gpt-oss-20b` | 30 | 8K | 1K | 200K |
+| extract | 4 | Gemini API `gemma-4-31b-it` | 30 | 16K | 14.4K | — |
+| translate | 1 | Gemini `gemini-3.5-flash-lite` | 15 | 250K | 500 | — |
+| translate | 2 | Gemini `gemini-3.1-flash-lite` | 15 | 250K | 500 | — |
+| translate | 3 | Gemini API `gemma-4-31b-it` | 30 | 16K | 14.4K | — |
+| translate | 4 | Groq `openai/gpt-oss-120b` | 30 | 8K | 1K | 200K |
+
+- Tên model theo hiển thị trong console; kiểm tra id thật bằng lệnh `verify-ai` (Actions → Run worker → `verify-ai`). Sai id → sửa cột `model` trong bảng `ai_providers`.
+- Các model Gemini "Flash" thường (không Lite) chỉ có 20 request/ngày → không dùng.
+- Router (`supabase/functions/_shared/ai/router.ts`): chọn provider theo priority; bỏ qua provider đã dùng ≥ 80% request hoặc token/ngày; chờ cửa sổ RPM/TPM tối đa 70s; 429 → bỏ provider đó cho cả lần chạy; lỗi khác hoặc JSON hỏng → thử provider kế. Hết provider → `AiUnavailableError`, pipeline dừng và để phần còn lại cho lần chạy sau.
+- `ai_usage` ghi qua hàm `record_ai_usage` (atomic, chỉ service_role). Cap theo topic: `topics.ai_daily_request_cap`.
+- **TPM 8K của Groq là giới hạn chặt nhất:** chấm điểm 25 tiêu đề/request (~4–5K token) → ~1 request/phút; một bản tin sáng mất khoảng 6–10 phút chạy trên Actions (miễn phí, repo public).
+
+### 8.1 Pipeline một bản tin (`node src/index.ts edition --edition morning`)
+
+1. Thu thập (§4.0).
+2. Cửa sổ: từ `window_end` của digest gần nhất (hoặc 24h trước) tới hiện tại.
+3. Xếp hạng sơ bộ bằng code → tối đa 150 tin, ≤ 30 tin/category → chấm điểm theo lô 25 → `scored` + `final_score`.
+4. Chọn tin theo slot (`supabase/functions/_shared/selection.ts`) → tạo `digests` + `digest_items`, tin được chọn → `selected`. Mỗi edition chỉ tạo digest 1 lần/ngày; chạy lại chỉ làm nốt việc dang dở.
+5. Nội dung: giải mã link Google News ra link gốc → Readability. Bị chặn (Reuters/WSJ trả 401) → thử bài của báo khác trong cùng cụm → cuối cùng dùng tiêu đề + mô tả. Lưu `content_snippet`, `original_url`.
+6. Tóm tắt tiếng Anh theo lô 3 → `summarized`; dịch theo lô 6 → `translated` (lúc này web public mới thấy).
 
 ---
 
