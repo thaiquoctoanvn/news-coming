@@ -1,7 +1,7 @@
 import { log } from '../log.ts';
 import {
   type AiRouter, type PromptTopic, finalScore, preRank, scoringPrompt, scoringSchema, summaryPrompt, summarySchema,
-  translationPrompt, translationSchema,
+  suspiciousTranslationWords, translationPrompt, translationSchema,
 } from '../shared.ts';
 import type { EditionStore } from '../store/edition-store.ts';
 import type { ArticleRow } from '../types.ts';
@@ -10,13 +10,14 @@ import type { ArticleRow } from '../types.ts';
 // so an interrupted run (quota, error) resumes on the next run without repeating finished work.
 
 export const SCORING_BATCH = 25;
-export const SUMMARY_BATCH = 3;
-export const TRANSLATION_BATCH = 6;
+// Long summaries (~350 words) keep each request under Groq's 8K tokens/minute.
+export const SUMMARY_BATCH = 2;
+export const TRANSLATION_BATCH = 3;
 
 export interface StepContext {
   readonly store: EditionStore;
   readonly router: AiRouter;
-  readonly topic: PromptTopic & { readonly id: string };
+  readonly topic: PromptTopic & { readonly id: string; readonly summaryWords: number };
   readonly now: Date;
 }
 
@@ -47,6 +48,7 @@ export async function scoreArticles(ctx: StepContext, raw: readonly ArticleRow[]
         impact: result.impact,
         direction: result.direction,
         explains: result.explains && moduleIds.has(result.explains) ? result.explains : null,
+        storyKey: result.story,
         aiReason: result.reason.slice(0, 300),
         finalScore: finalScore({ ...article, impact: result.impact }, ctx.now),
         scoredAt: ctx.now,
@@ -57,13 +59,14 @@ export async function scoreArticles(ctx: StepContext, raw: readonly ArticleRow[]
   return scored;
 }
 
-/** Summarizes selected articles whose text is already in `texts`; returns how many were summarized. */
-export async function summarizeArticles(ctx: StepContext, articles: readonly ArticleRow[], texts: ReadonlyMap<string, string>): Promise<number> {
+/** Summarizes selected articles from their own text; returns how many were summarized. */
+export async function summarizeArticles(ctx: StepContext, articles: readonly ArticleRow[]): Promise<number> {
   let done = 0;
   for (const batch of batches(articles, SUMMARY_BATCH)) {
     const request = summaryPrompt(batch.map((a, i) => ({
-      id: String(i + 1), title: a.title, publisher: a.sourceName, text: texts.get(a.id) ?? a.title,
-    })));
+      id: String(i + 1), title: a.title, publisher: a.sourceName,
+      text: a.contentSnippet ?? [a.title, a.description].filter(Boolean).join('. '),
+    })), ctx.topic.summaryWords);
     const { data } = await ctx.router.complete('extract', request, summarySchema);
     for (const result of data.items) {
       const article = batch[Number(result.id) - 1];
@@ -78,17 +81,38 @@ export async function summarizeArticles(ctx: StepContext, articles: readonly Art
 export async function translateArticles(ctx: StepContext, articles: readonly ArticleRow[]): Promise<number> {
   let done = 0;
   for (const batch of batches(articles, TRANSLATION_BATCH)) {
-    const request = translationPrompt(batch.map((a, i) => ({ id: String(i + 1), title: a.title, summary: a.summaryEn ?? a.title })));
-    const { data, providerId } = await ctx.router.complete('translate', request, translationSchema);
-    for (const result of data.items) {
-      const article = batch[Number(result.id) - 1];
-      if (!article) continue;
+    const results = await translateBatch(ctx, batch);
+    for (const [article, result] of results) {
+      // A garbled output ("trongani") gets one more try on its own.
+      const final = isGarbled(article, result) ? (await translateBatch(ctx, [article])).get(article) ?? result : result;
+      if (isGarbled(article, final)) log.warn('translation still has suspicious words', { articleId: article.id });
       await ctx.store.updateArticle(article.id, {
-        status: 'translated', titleVi: result.title_vi, summaryVi: result.summary_vi, translatedAt: ctx.now,
+        status: 'translated', titleVi: final.title_vi, summaryVi: final.summary_vi, translatedAt: ctx.now,
       });
       done++;
     }
-    log.info('translated batch', { provider: providerId, items: batch.length });
   }
   return done;
+}
+
+interface Translation {
+  readonly title_vi: string;
+  readonly summary_vi: string;
+}
+
+async function translateBatch(ctx: StepContext, batch: readonly ArticleRow[]): Promise<Map<ArticleRow, Translation>> {
+  const request = translationPrompt(batch.map((a, i) => ({ id: String(i + 1), title: a.title, summary: a.summaryEn ?? a.title })));
+  const { data, providerId } = await ctx.router.complete('translate', request, translationSchema);
+  log.info('translated batch', { provider: providerId, items: batch.length });
+  const results = new Map<ArticleRow, Translation>();
+  for (const result of data.items) {
+    const article = batch[Number(result.id) - 1];
+    if (article) results.set(article, result);
+  }
+  return results;
+}
+
+function isGarbled(article: ArticleRow, t: Translation): boolean {
+  const source = `${article.title} ${article.summaryEn ?? ''}`;
+  return suspiciousTranslationWords(`${t.title_vi} ${t.summary_vi}`, source).length > 0;
 }

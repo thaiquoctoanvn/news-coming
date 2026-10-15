@@ -5,15 +5,19 @@ import type { ArticleQuery, EditionConfig, EditionStore, NewDigest } from './edi
 
 const ARTICLE_COLUMNS = [
   'id', 'topic_id', 'url', 'source_name', 'title', 'description', 'status', 'category_id', 'entity_id', 'authority',
-  'source_count', 'cluster_key', 'published_at', 'fetched_at', 'impact', 'direction', 'explains', 'final_score', 'summary_en',
+  'source_count', 'cluster_key', 'published_at', 'fetched_at', 'impact', 'direction', 'explains', 'final_score', 'story_key',
+  'content_snippet', 'summary_en',
 ].join(', ');
 const PAGE_SIZE = 1000;
+const DEFAULT_SUMMARY_WORDS = 350;
+const MAX_CLUSTER_MEMBERS = 5;
 
 interface ArticleDbRow {
   id: string; topic_id: string; url: string; source_name: string; title: string; description: string | null;
   status: ArticleStatus; category_id: string | null; entity_id: string | null; authority: number; source_count: number;
   cluster_key: string | null; published_at: string | null; fetched_at: string; impact: number | null;
-  direction: Direction | null; explains: string | null; final_score: number | null; summary_en: string | null;
+  direction: Direction | null; explains: string | null; final_score: number | null; story_key: string | null;
+  content_snippet: string | null; summary_en: string | null;
 }
 
 interface SlotDbRow {
@@ -43,7 +47,7 @@ class SupabaseEditionStore implements EditionStore {
       this.db.from('topics').select('id, name_vi, scoring_guide, ai_daily_request_cap, settings').eq('id', topicId).eq('enabled', true).maybeSingle(),
       this.db.from('editions').select('id, timezone, size_max').eq('topic_id', topicId).eq('id', editionId).eq('enabled', true).maybeSingle(),
       this.db.from('digest_slots').select('*').eq('topic_id', topicId).eq('enabled', true),
-      this.db.from('categories').select('id, name_vi').eq('topic_id', topicId).eq('enabled', true).order('position'),
+      this.db.from('categories').select('id, name_vi, description_en').eq('topic_id', topicId).eq('enabled', true).order('position'),
       this.db.from('entities').select('id, name').eq('topic_id', topicId).eq('enabled', true).order('position'),
       this.db.from('data_modules').select('id, name_vi').eq('topic_id', topicId).eq('enabled', true),
     ]);
@@ -52,7 +56,7 @@ class SupabaseEditionStore implements EditionStore {
     }
     if (!topic.data || !edition.data) return null;
 
-    const t = topic.data as { id: string; name_vi: string; scoring_guide: string; ai_daily_request_cap: number; settings: { pin?: { min_impact?: number; direction?: Direction; max?: number } } };
+    const t = topic.data as { id: string; name_vi: string; scoring_guide: string; ai_daily_request_cap: number; settings: { pin?: { min_impact?: number; direction?: Direction; max?: number }; summary_words?: number } };
     const e = edition.data as { id: string; timezone: string; size_max: number };
     const pin = t.settings.pin;
     return {
@@ -62,13 +66,15 @@ class SupabaseEditionStore implements EditionStore {
         scoringGuide: t.scoring_guide,
         aiDailyRequestCap: t.ai_daily_request_cap,
         pin: pin?.min_impact !== undefined ? { minImpact: pin.min_impact, direction: pin.direction ?? 'negative', max: pin.max ?? 3 } satisfies PinRule : null,
+        summaryWords: t.settings.summary_words ?? DEFAULT_SUMMARY_WORDS,
       },
       edition: { id: e.id, timezone: e.timezone, sizeMax: e.size_max },
       slots: (slots.data as SlotDbRow[]).map((s): SlotConfig => ({
         id: s.id, position: s.position, kind: s.kind, categoryIds: s.category_ids, entityIds: s.entity_ids, maxItems: s.max_items,
         minScore: s.min_score, extraItemMinScore: s.extra_item_min_score, attachModules: s.attach_modules,
       })),
-      categories: (categories.data as { id: string; name_vi: string }[]).map((c) => ({ id: c.id, name: c.name_vi })),
+      categories: (categories.data as { id: string; name_vi: string; description_en: string | null }[])
+        .map((c) => ({ id: c.id, name: c.name_vi, description: c.description_en })),
       entities: (entities.data as { id: string; name: string }[]).map((c) => ({ id: c.id, name: c.name })),
       modules: (modules.data as { id: string; name_vi: string }[]).map((c) => ({ id: c.id, name: c.name_vi })),
     };
@@ -157,11 +163,11 @@ class SupabaseEditionStore implements EditionStore {
     if (error) throw new Error(`update article: ${error.message}`);
   }
 
-  async loadClusterUrls(topicId: string, clusterKey: string, excludeId: string): Promise<string[]> {
-    const { data, error } = await this.db.from('articles').select('url').eq('topic_id', topicId)
-      .eq('cluster_key', clusterKey).neq('id', excludeId).order('authority', { ascending: false }).limit(5);
-    if (error) throw new Error(`load cluster urls: ${error.message}`);
-    return (data as { url: string }[]).map((row) => row.url);
+  async loadClusterMembers(topicId: string, clusterKey: string, excludeId: string): Promise<ArticleRow[]> {
+    const { data, error } = await this.db.from('articles').select(ARTICLE_COLUMNS).eq('topic_id', topicId)
+      .eq('cluster_key', clusterKey).neq('id', excludeId).order('authority', { ascending: false }).limit(MAX_CLUSTER_MEMBERS);
+    if (error) throw new Error(`load cluster members: ${error.message}`);
+    return (data as unknown as ArticleDbRow[]).map(toArticleRow);
   }
 }
 
@@ -170,13 +176,14 @@ function toArticleRow(r: ArticleDbRow): ArticleRow {
     id: r.id, topicId: r.topic_id, url: r.url, sourceName: r.source_name, title: r.title, description: r.description,
     status: r.status, categoryId: r.category_id, entityId: r.entity_id, authority: r.authority, sourceCount: r.source_count,
     clusterKey: r.cluster_key, publishedAt: r.published_at ? new Date(r.published_at) : null, fetchedAt: new Date(r.fetched_at),
-    impact: r.impact, direction: r.direction, explains: r.explains, finalScore: r.final_score, summaryEn: r.summary_en,
+    impact: r.impact, direction: r.direction, explains: r.explains, finalScore: r.final_score, storyKey: r.story_key,
+    contentSnippet: r.content_snippet, summaryEn: r.summary_en,
   };
 }
 
 const PATCH_COLUMNS: Record<keyof ArticlePatch, string> = {
   status: 'status', categoryId: 'category_id', entityId: 'entity_id', impact: 'impact', direction: 'direction',
-  explains: 'explains', aiReason: 'ai_reason', finalScore: 'final_score', scoredAt: 'scored_at',
+  explains: 'explains', aiReason: 'ai_reason', finalScore: 'final_score', storyKey: 'story_key', scoredAt: 'scored_at',
   contentSnippet: 'content_snippet', originalUrl: 'original_url', summaryEn: 'summary_en', titleVi: 'title_vi',
   summaryVi: 'summary_vi', translatedAt: 'translated_at',
 };

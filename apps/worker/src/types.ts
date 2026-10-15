@@ -113,6 +113,8 @@ export interface ArticleRow {
   readonly direction: 'negative' | 'neutral' | 'positive' | null;
   readonly explains: string | null;
   readonly finalScore: number | null;
+  readonly storyKey: string | null;
+  readonly contentSnippet: string | null;
   readonly summaryEn: string | null;
 }
 
@@ -125,6 +127,7 @@ export interface ArticlePatch {
   readonly explains?: string | null;
   readonly aiReason?: string;
   readonly finalScore?: number;
+  readonly storyKey?: string | null;
   readonly scoredAt?: Date;
   readonly contentSnippet?: string;
   readonly originalUrl?: string | null;

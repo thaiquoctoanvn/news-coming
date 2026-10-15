@@ -5,7 +5,7 @@ import { type SelectionCandidate, type SlotConfig, selectDigest } from '../src/s
 const NOW = new Date('2026-10-15T00:00:00Z');
 
 const candidate = (id: string, overrides: Partial<SelectionCandidate> = {}): SelectionCandidate => ({
-  id, categoryId: 'other', entityId: null, impact: 5, direction: 'neutral', explains: null, finalScore: 50, ...overrides,
+  id, categoryId: 'other', entityId: null, impact: 5, direction: 'neutral', explains: null, finalScore: 50, storyKey: null, ...overrides,
 });
 
 const slot = (overrides: Partial<SlotConfig> & Pick<SlotConfig, 'id' | 'position' | 'kind'>): SlotConfig => ({
@@ -56,6 +56,17 @@ describe('selectDigest', () => {
       { articleId: 'crash', slotId: null, isPinned: true, position: 1 },
       { articleId: 'fed', slotId: 'fed', isPinned: false, position: 2 },
     ]);
+  });
+
+  test('keeps only the best item of each story across pins, slots and fill', () => {
+    const picks = selectDigest([
+      candidate('cpi-1', { categoryId: 'fed', finalScore: 75, storyKey: 'us-cpi-sep' }),
+      candidate('cpi-2', { categoryId: 'fed', finalScore: 72, storyKey: 'us-cpi-sep' }),
+      candidate('cpi-3', { finalScore: 70, storyKey: 'us-cpi-sep' }),
+      candidate('other', { finalScore: 60, storyKey: 'something-else' }),
+    ], SLOTS, null, 12);
+
+    expect(picks.map((p) => p.articleId)).toEqual(['cpi-1', 'other']);
   });
 
   test('empty slots stay empty instead of taking low-quality items', () => {

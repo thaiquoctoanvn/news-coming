@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, test } from 'vitest';
 import { authorityForDomain } from '../src/sources/authority.ts';
 import { parseEdgarSubmissions } from '../src/sources/edgar.ts';
-import { googleNewsUrl, parseGoogleNews } from '../src/sources/google-news.ts';
+import { cleanPublisher, googleNewsUrl, parseGoogleNews } from '../src/sources/google-news.ts';
 import { parseBinanceAnnouncements, parseGdelt } from '../src/sources/json-sources.ts';
 import { parseFeed } from '../src/sources/rss.ts';
 import { parseTreasuryPressReleases } from '../src/sources/treasury.ts';
@@ -50,6 +50,11 @@ describe('parseGoogleNews', () => {
       publisherDomain: 'finance.yahoo.com',
     });
     expect(items[1]?.publisherDomain).toBe('reuters.com');
+  });
+
+  test('shortens publisher names with a page title prefix', () => {
+    expect(cleanPublisher('Crude Oil Prices Today | OilPrice.com')).toBe('OilPrice.com');
+    expect(cleanPublisher('Reuters')).toBe('Reuters');
   });
 
   test('builds a 1-day search URL', () => {

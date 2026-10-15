@@ -1,38 +1,64 @@
-import { type FetchLike, decodeGoogleNewsUrl, extractArticleText, isGoogleNewsUrl } from '../shared.ts';
-import type { EditionStore } from '../store/edition-store.ts';
+import { JINA_MIN_INTERVAL_MS, type FetchLike, decodeGoogleNewsUrl, isGoogleNewsUrl, isPaywalled, readWithJina } from '../shared.ts';
 import type { ArticleRow } from '../types.ts';
 
-// Finds readable text for each selected article: its own page, then other outlets of the same
-// story (the representative is often a paywalled Reuters/WSJ link), then title + description.
-
-const MAX_ALTERNATES = 3;
+// Reads each article's own text (DESIGN.md §8.1). An article is never paired with another
+// article's text: when it cannot be read, the caller replaces the whole article or drops it.
 
 export interface ArticleContent {
-  readonly text: string;
+  /** Article body, or null when it could not be read. */
+  readonly text: string | null;
   readonly originalUrl: string | null;
 }
 
-export async function loadArticleContent(store: EditionStore, article: ArticleRow, fetchImpl: FetchLike): Promise<ArticleContent> {
-  const originalUrl = await resolveUrl(article.url, fetchImpl);
-  const own = originalUrl ? await extractArticleText(originalUrl, fetchImpl) : null;
-  if (own) return { text: own, originalUrl };
-
-  if (article.clusterKey) {
-    const alternates = await store.loadClusterUrls(article.topicId, article.clusterKey, article.id);
-    for (const url of alternates.slice(0, MAX_ALTERNATES)) {
-      const resolved = await resolveUrl(url, fetchImpl);
-      const text = resolved ? await extractArticleText(resolved, fetchImpl) : null;
-      if (text) return { text, originalUrl };
-    }
-  }
-  return { text: [article.title, article.description].filter(Boolean).join('. '), originalUrl };
+export interface ReaderOptions {
+  readonly fetchImpl: FetchLike;
+  readonly sleep?: (ms: number) => Promise<void>;
+  readonly now?: () => number;
 }
 
-async function resolveUrl(url: string, fetchImpl: FetchLike): Promise<string | null> {
-  if (!isGoogleNewsUrl(url)) return url;
-  try {
-    return await decodeGoogleNewsUrl(url, fetchImpl);
-  } catch {
-    return null;
+/** Reads articles through Jina Reader, spacing calls for its free rate limit and caching results per run. */
+export class ArticleReader {
+  private readonly fetchImpl: FetchLike;
+  private readonly sleep: (ms: number) => Promise<void>;
+  private readonly now: () => number;
+  private readonly cache = new Map<string, ArticleContent>();
+  private lastCall = 0;
+
+  constructor(options: ReaderOptions) {
+    this.fetchImpl = options.fetchImpl;
+    this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+    this.now = options.now ?? Date.now;
+  }
+
+  async read(article: ArticleRow): Promise<ArticleContent> {
+    const cached = this.cache.get(article.id);
+    if (cached) return cached;
+    if (article.contentSnippet) return this.remember(article.id, { text: article.contentSnippet, originalUrl: null });
+
+    const originalUrl = isGoogleNewsUrl(article.url) ? await this.decode(article.url) : article.url;
+    if (!originalUrl) return this.remember(article.id, { text: null, originalUrl: null });
+    if (isPaywalled(originalUrl)) return this.remember(article.id, { text: null, originalUrl });
+    await this.waitTurn();
+    const text = await readWithJina(originalUrl, this.fetchImpl);
+    return this.remember(article.id, { text, originalUrl });
+  }
+
+  private async decode(url: string): Promise<string | null> {
+    try {
+      return await decodeGoogleNewsUrl(url, this.fetchImpl);
+    } catch {
+      return null;
+    }
+  }
+
+  private async waitTurn(): Promise<void> {
+    const wait = this.lastCall + JINA_MIN_INTERVAL_MS - this.now();
+    if (wait > 0) await this.sleep(wait);
+    this.lastCall = this.now();
+  }
+
+  private remember(id: string, content: ArticleContent): ArticleContent {
+    this.cache.set(id, content);
+    return content;
   }
 }

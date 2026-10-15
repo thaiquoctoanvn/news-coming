@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { describe, expect, test } from 'vitest';
 import {
-  type AiProvider, AiRouter, AiUnavailableError, type UsageStore, type UsageTotals, isGoogleNewsUrl, parseBatchExecuteUrl,
-  readableText, scoringSchema,
+  type AiProvider, AiRouter, AiUnavailableError, type UsageStore, type UsageTotals, articleTextFromJina, isGoogleNewsUrl, isPaywalled,
+  normalizeStoryKey, parseBatchExecuteUrl, scoringSchema, suspiciousTranslationWords,
 } from '../src/shared.ts';
 import { parseModelJson } from '../../../supabase/functions/_shared/ai/json.ts';
 
@@ -111,7 +111,7 @@ describe('model output parsing', () => {
     const text = '```json\n{"items":[{"id":1,"category":"oil","entity":"none","impact":"12","direction":"bearish","reason":"x"}]}\n```';
 
     expect(parseModelJson(text, scoringSchema).items[0]).toEqual({
-      id: '1', category: 'oil', entity: null, impact: 10, direction: 'neutral', explains: null, reason: 'x',
+      id: '1', category: 'oil', entity: null, impact: 10, direction: 'neutral', explains: null, story: null, reason: 'x',
     });
   });
 
@@ -134,13 +134,41 @@ describe('content helpers', () => {
     expect(parseBatchExecuteUrl('garbage')).toBeNull();
   });
 
-  test('extracts article text, falling back to the meta description', () => {
-    const paragraph = 'Oil prices rose on Thursday as traders weighed supply risks in the Middle East. '.repeat(6);
-    const article = `<html><head><title>T</title></head><body><article><h1>Oil</h1><p>${paragraph}</p><p>${paragraph}</p></article></body></html>`;
-    const blocked = '<html><head><meta property="og:description" content="Oil fell as traders assessed attacks on ships near Hormuz."></head><body>Subscribe</body></html>';
+  test('keeps the prose of a Jina page and drops navigation and site chrome', () => {
+    const prose = 'Oil fell on Thursday as traders assessed supply disruptions after attacks on ships near Hormuz. '.repeat(4).trim();
+    const page = [
+      'Title: Oil falls', '', 'URL Source: https://www.cnbc.com/x', '', 'Markdown Content:',
+      '[Skip to main content](https://x)', '', '*   [Markets](https://x/m) [Tech](https://x/t)', '',
+      '![photo](https://img)', '', prose, '', `Analysts at [Goldman](https://gs.com) expect volatility to persist. ${prose}`, '',
+      '| Price | Change |', '', 'Secure .gov websites use HTTPS and you should always check the lock icon before sharing data.',
+    ].join('\n');
 
-    expect(readableText(article)).toContain('Oil prices rose on Thursday');
-    expect(readableText(blocked)).toBe('Oil fell as traders assessed attacks on ships near Hormuz.');
-    expect(readableText('<html><body>no</body></html>')).toBeNull();
+    const text = articleTextFromJina(page);
+
+    expect(text?.split('\n\n')).toEqual([prose, `Analysts at Goldman expect volatility to persist. ${prose}`]);
+  });
+
+  test('treats untitled or too short Jina pages as unreadable', () => {
+    expect(articleTextFromJina('Title: \n\nMarkdown Content:\nPage not found. This page could not be located on our servers.')).toBeNull();
+    expect(articleTextFromJina('Title: Short\n\nMarkdown Content:\nOnly one short sentence of text here, too short.')).toBeNull();
+  });
+
+  test('knows paywalled publishers', () => {
+    expect(isPaywalled('https://www.reuters.com/markets/x')).toBe(true);
+    expect(isPaywalled('https://www.cnbc.com/x')).toBe(false);
+  });
+});
+
+describe('story keys and translation checks', () => {
+  test('normalizes story keys', () => {
+    expect(normalizeStoryKey(' US CPI — Sep 2026 ')).toBe('us-cpi-sep-2026');
+    expect(normalizeStoryKey('')).toBeNull();
+  });
+
+  test('flags English fragments glued into the Vietnamese text', () => {
+    const english = 'BMNR rose in premarket trading as Ethereum crossed 2,000 dollars';
+
+    expect(suspiciousTranslationWords('BMNR tăng khoảng 2% trongani giao dịch trước giờ mở cửa', english)).toEqual(['trongani']);
+    expect(suspiciousTranslationWords('Ethereum vượt 2.000 $, cổ phiếu BMNR tăng', english)).toEqual([]);
   });
 });

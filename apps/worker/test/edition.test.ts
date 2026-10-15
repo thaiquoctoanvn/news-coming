@@ -24,11 +24,14 @@ const topicConfig: TopicConfig = {
 };
 
 const editionConfig: EditionConfig = {
-  topic: { id: 'macro_finance', name: 'Macro', scoringGuide: 'guide', aiDailyRequestCap: 60, pin: { minImpact: 9, direction: 'negative', max: 3 } },
+  topic: {
+    id: 'macro_finance', name: 'Macro', scoringGuide: 'guide', aiDailyRequestCap: 60,
+    pin: { minImpact: 9, direction: 'negative', max: 3 }, summaryWords: 350,
+  },
   edition: { id: 'morning', timezone: 'Asia/Ho_Chi_Minh', sizeMax: 3 },
   slots: [
     { id: 'oil', position: 1, kind: 'category', categoryIds: ['oil'], entityIds: [], maxItems: 1, minScore: 40, extraItemMinScore: null, attachModules: [] },
-    { id: 'rest', position: 6, kind: 'fill', categoryIds: [], entityIds: [], maxItems: 12, minScore: 50, extraItemMinScore: null, attachModules: [] },
+    { id: 'rest', position: 6, kind: 'fill', categoryIds: [], entityIds: [], maxItems: 12, minScore: 40, extraItemMinScore: null, attachModules: [] },
   ],
   categories: [{ id: 'oil', name: 'Dầu' }, { id: 'fed', name: 'FED' }],
   entities: [],
@@ -40,6 +43,11 @@ const providers: AiProvider[] = [
   { id: 'gemini', role: 'translate', provider: 'gemini', model: 'g', priority: 1, dailyRequestLimit: 500, dailyTokenLimit: null, rpmLimit: 15, tpmLimit: null, requestOptions: {} },
 ];
 
+const READABLE_PAGE = [
+  'Title: Article', '', 'Markdown Content:',
+  'Prices moved sharply on Thursday as traders reacted to new information about supply and demand. '.repeat(8),
+].join('\n');
+
 const items: RawItem[] = [
   { url: 'https://news.example/1', title: 'Oil supply shock as tankers attacked', publisher: 'A', publishedAt: hoursAgo(1) },
   { url: 'https://news.example/2', title: 'Fed signals rate cut path', publisher: 'B', publishedAt: hoursAgo(2) },
@@ -47,27 +55,29 @@ const items: RawItem[] = [
   { url: 'https://news.example/4', title: 'Oil traders weigh demand outlook', publisher: 'D', publishedAt: hoursAgo(4) },
 ];
 
-// Fake AI: scores by keyword, summarizes and translates deterministically.
-function fakeAi(options: { translateStatus?: number } = {}) {
+// Fake AI and Jina: scores by keyword, summarizes and translates deterministically.
+function fakeServices(options: { translateStatus?: number; unreadable?: readonly string[] } = {}) {
   const calls: string[] = [];
   const fetchImpl = async (url: string, init: RequestInit): Promise<Response> => {
+    if (url.startsWith('https://r.jina.ai/')) {
+      calls.push('jina');
+      const target = url.slice('https://r.jina.ai/'.length);
+      return options.unreadable?.includes(target) ? new Response('Title: \n\nMarkdown Content:\n', { status: 200 }) : new Response(READABLE_PAGE);
+    }
     const body = JSON.parse(String(init.body)) as Record<string, unknown>;
     if (url.includes('groq')) {
-      const user = (body.messages as { content: string }[])[1]!.content;
-      const system = (body.messages as { content: string }[])[0]!.content;
-      calls.push(system.includes('score') ? 'score' : 'summary');
-      const content = system.includes('score') ? scoreAnswer(user) : summaryAnswer(user);
+      const [system, user] = (body.messages as { content: string }[]).map((m) => m.content);
+      const isScoring = system!.includes('score');
+      calls.push(isScoring ? 'score' : 'summary');
+      const content = isScoring ? scoreAnswer(user!) : summaryAnswer(user!);
       return Response.json({ choices: [{ message: { content } }], usage: { prompt_tokens: 10, completion_tokens: 10 } });
     }
-    if (url.includes('generativelanguage')) {
-      calls.push('translate');
-      if (options.translateStatus) return new Response('quota', { status: options.translateStatus });
-      const user = (body.contents as { parts: { text: string }[] }[])[0]!.parts[0]!.text;
-      const input = JSON.parse(user) as { id: string; title: string }[];
-      const text = JSON.stringify({ items: input.map((i) => ({ id: i.id, title_vi: `VI ${i.title}`, summary_vi: 'Tóm tắt' })) });
-      return Response.json({ candidates: [{ content: { parts: [{ text }] } }], usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 5 } });
-    }
-    return new Response('blocked', { status: 403 }); // article pages: fall back to title
+    calls.push('translate');
+    if (options.translateStatus) return new Response('quota', { status: options.translateStatus });
+    const user = (body.contents as { parts: { text: string }[] }[])[0]!.parts[0]!.text;
+    const input = JSON.parse(user) as { id: string; title: string }[];
+    const text = JSON.stringify({ items: input.map((i) => ({ id: i.id, title_vi: `VI ${i.title}`, summary_vi: 'Tóm tắt' })) });
+    return Response.json({ candidates: [{ content: { parts: [{ text }] } }], usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 5 } });
   };
   return { calls, fetchImpl };
 }
@@ -75,9 +85,11 @@ function fakeAi(options: { translateStatus?: number } = {}) {
 function scoreAnswer(user: string): string {
   const scored = user.split('\n').map((line) => {
     const [id, , title = ''] = line.split(' | ');
-    const isOil = title.includes('Oil');
-    const impact = title.includes('shock') ? 9 : title.includes('rate cut') ? 7 : 4;
-    return { id, category: isOil ? 'oil' : 'fed', entity: null, impact, direction: title.includes('shock') ? 'negative' : 'neutral', explains: null, reason: 'r' };
+    const impact = title.includes('shock') ? 9 : title.includes('rate cut') ? 7 : 5;
+    return {
+      id, category: title.includes('Oil') ? 'oil' : 'fed', entity: null, impact,
+      direction: title.includes('shock') ? 'negative' : 'neutral', explains: null, story: title, reason: 'r',
+    };
   });
   return JSON.stringify({ items: scored });
 }
@@ -87,57 +99,80 @@ function summaryAnswer(user: string): string {
   return JSON.stringify({ items: ids.map((id) => ({ id, summary: `Summary ${id}` })) });
 }
 
-function setup(ai = fakeAi()) {
+function setup(services = fakeServices(), sourceItems: readonly RawItem[] = items) {
   const store = new MemoryStore([topicConfig]);
   const editionStore = new MemoryEditionStore(store, editionConfig, providers);
-  const run = () => runEdition({
-    store, editionStore, topicId: 'macro_finance', editionId: 'morning', trigger: 'manual',
-    fetchSource: async () => items, keys: { groq: 'k', gemini: 'k' }, fetchImpl: ai.fetchImpl, now: NOW,
+  const run = (edition = editionStore, fetchImpl = services.fetchImpl) => runEdition({
+    store, editionStore: edition, topicId: 'macro_finance', editionId: 'morning', trigger: 'manual',
+    fetchSource: async () => [...sourceItems], keys: { groq: 'k', gemini: 'k' }, fetchImpl, now: NOW, sleep: async () => {},
   });
-  return { store, editionStore, run, ai };
+  return { store, editionStore, run, services };
 }
+
+const digestTitles = (editionStore: MemoryEditionStore): (string | undefined)[] => {
+  const rows = editionStore.rows();
+  return editionStore.digests[0]?.items.map((i) => rows.find((a) => a.id === i.articleId)?.title) ?? [];
+};
 
 describe('runEdition', () => {
   test('collects, scores, selects, summarizes and translates a digest', async () => {
-    const { editionStore, run, ai } = setup();
+    const { editionStore, run, services } = setup();
 
     const result = await run();
 
     expect(result.status).toBe('success');
-    expect(result.stats).toMatchObject({ scored: 4, selected: 3, summarized: 3, translated: 3, aiStopped: null });
+    expect(result.stats).toMatchObject({ scored: 4, selected: 3, replaced: 0, dropped: 0, summarized: 3, translated: 3, aiStopped: null });
     const [digest] = editionStore.digests;
     expect(digest?.digestDate).toBe(localDate(NOW, 'Asia/Ho_Chi_Minh'));
-    const titleOf = (id: string) => editionStore.rows().find((a) => a.id === id)?.title;
-    expect(digest?.items.map((i) => [titleOf(i.articleId), i.slotId, i.isPinned])).toEqual([
-      ['Oil supply shock as tankers attacked', null, true],
-      ['Oil traders weigh demand outlook', 'oil', false],
-      ['Fed signals rate cut path', 'rest', false],
+    expect(digest?.items.map((i) => [i.slotId, i.isPinned])).toEqual([[null, true], ['oil', false], ['rest', false]]);
+    expect(digestTitles(editionStore)).toEqual([
+      'Oil supply shock as tankers attacked', 'Oil traders weigh demand outlook', 'Fed signals rate cut path',
     ]);
     const translated = editionStore.rows().filter((a) => a.status === 'translated');
-    expect(translated.map((a) => a.titleVi).sort()).toEqual([
-      'VI Fed signals rate cut path', 'VI Oil supply shock as tankers attacked', 'VI Oil traders weigh demand outlook',
+    expect(translated).toHaveLength(3);
+    expect(translated.every((a) => a.contentSnippet?.startsWith('Prices moved sharply'))).toBe(true);
+    expect(services.calls.filter((c) => c !== 'jina')).toEqual(['score', 'summary', 'summary', 'translate']);
+  });
+
+  test('an unreadable article is replaced as a whole by a readable report of the same story', async () => {
+    const services = fakeServices({ unreadable: ['https://blocked.example/1'] });
+    const { editionStore, run } = setup(services, [
+      { url: 'https://blocked.example/1', title: 'Oil supply shock as tankers attacked', publisher: 'Paywalled', publishedAt: hoursAgo(5) },
+      { url: 'https://open.example/1', title: 'Oil supply shock as tankers attacked overnight', publisher: 'Open', publishedAt: hoursAgo(1) },
+      ...items.slice(1),
     ]);
-    expect(translated.every((a) => a.contentSnippet === `${a.title}`)).toBe(true); // pages blocked → title fallback
-    expect(ai.calls).toEqual(['score', 'summary', 'translate']);
-    expect(editionStore.usage).toHaveLength(3);
+
+    const result = await run();
+
+    expect(result.stats).toMatchObject({ selected: 3, replaced: 1, dropped: 0 });
+    const pinned = editionStore.rows().find((a) => a.id === editionStore.digests[0]?.items[0]?.articleId);
+    expect(pinned).toMatchObject({ title: 'Oil supply shock as tankers attacked overnight', sourceName: 'Open', url: 'https://open.example/1', impact: 9 });
+  });
+
+  test('an unreadable article without substitute is dropped and its slot takes the next candidate', async () => {
+    const { editionStore, run } = setup(fakeServices({ unreadable: ['https://news.example/4'] }));
+
+    const result = await run();
+
+    expect(result.stats).toMatchObject({ selected: 3, replaced: 0, dropped: 1 });
+    expect(digestTitles(editionStore)).toEqual([
+      'Oil supply shock as tankers attacked', 'Fed signals rate cut path', 'Fed official speaks about inflation',
+    ]);
   });
 
   test('stops at the translation quota, then finishes pending work on the next run', async () => {
-    const blocked = setup(fakeAi({ translateStatus: 429 }));
+    const { editionStore, run } = setup(fakeServices({ translateStatus: 429 }));
 
-    const first = await blocked.run();
+    const first = await run();
 
     expect(first.status).toBe('partial');
     expect(first.stats).toMatchObject({ summarized: 3, translated: 0 });
     expect(first.stats?.aiStopped).toContain('No translate provider available');
 
-    const resumed = new MemoryEditionStore(blocked.store, editionConfig, providers);
-    resumed.patches = blocked.editionStore.patches;
-    resumed.digests = blocked.editionStore.digests;
-    const second = await runEdition({
-      store: blocked.store, editionStore: resumed, topicId: 'macro_finance', editionId: 'morning', trigger: 'manual',
-      fetchSource: async () => items, keys: { groq: 'k', gemini: 'k' }, fetchImpl: fakeAi().fetchImpl, now: NOW,
-    });
+    const resumed = new MemoryEditionStore(editionStore['base'], editionConfig, providers);
+    resumed.patches = editionStore.patches;
+    resumed.digests = editionStore.digests;
+    const second = await run(resumed, fakeServices().fetchImpl);
 
     expect(second.stats).toMatchObject({ scored: 0, selected: 0, summarized: 0, translated: 3 });
     expect(resumed.digests).toHaveLength(1);

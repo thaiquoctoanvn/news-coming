@@ -16,7 +16,13 @@ export function parseGoogleNews(xml: string): RawItem[] {
   return parseFeed(xml).map(({ description: _description, ...item }) => ({
     ...item,
     title: stripPublisherSuffix(item.title, item.publisher),
+    ...(item.publisher ? { publisher: cleanPublisher(item.publisher) } : {}),
   }));
+}
+
+/** "Crude Oil Prices Today | OilPrice.com" → "OilPrice.com". */
+export function cleanPublisher(name: string): string {
+  return name.split(' | ').map((part) => part.trim()).filter(Boolean).at(-1) ?? name;
 }
 
 export function stripPublisherSuffix(title: string, publisher: string | undefined): string {
