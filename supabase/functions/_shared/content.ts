@@ -119,11 +119,20 @@ export async function readDirect(url: string, fetchImpl: FetchLike = fetch): Pro
   return html ? articleTextFromHtml(html) : null;
 }
 
+/** The part of linkedom's document we use; its declared types differ between Node and Deno. */
+interface ParsedDocument {
+  querySelectorAll(selectors: string): ArrayLike<{ readonly textContent: string | null }>;
+}
+
+function parseDocument(html: string): ParsedDocument {
+  return (parseHTML(html) as unknown as { document: ParsedDocument }).document;
+}
+
 export function articleTextFromHtml(html: string): string | null {
-  const article = new Readability(parseHTML(html).document as never).parse();
+  const article = new Readability(parseDocument(html) as never).parse();
   if (!article?.content) return null;
-  const { document } = parseHTML(`<html><body>${article.content}</body></html>`);
-  const blocks = [...document.querySelectorAll('p, li, blockquote')].map((node) => node.textContent ?? '');
+  const document = parseDocument(`<html><body>${article.content}</body></html>`);
+  const blocks = Array.from(document.querySelectorAll('p, li, blockquote'), (node) => node.textContent ?? '');
   return joinProse(blocks);
 }
 

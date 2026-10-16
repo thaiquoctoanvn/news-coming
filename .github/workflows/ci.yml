@@ -38,3 +38,17 @@ jobs:
       # Applies every migration on a fresh local Postgres, then runs pgTAP tests.
       - run: supabase db start
       - run: supabase test db
+
+  functions:
+    name: Edge Functions typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      # Each function has its own import map (deno.json); shared code is type-checked through it.
+      - run: |
+          for f in supabase/functions/*/index.ts; do
+            (cd "$(dirname "$f")" && deno check --config deno.json index.ts)
+          done

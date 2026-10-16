@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useParams } from 'react-router';
+import { useAuth } from '../lib/auth.tsx';
 import { useTopics } from '../lib/queries.ts';
 import { ThemeToggle } from './ThemeToggle.tsx';
 
@@ -16,6 +17,7 @@ function navClass({ isActive }: { isActive: boolean }): string {
 export function AppShell() {
   const { topicId = '' } = useParams();
   const topics = useTopics();
+  const auth = useAuth();
   const otherTopics = (topics.data ?? []).filter((t) => t.id !== topicId);
   const current = topics.data?.find((t) => t.id === topicId);
 
@@ -34,6 +36,7 @@ export function AppShell() {
               </NavLink>
             ))}
           </nav>
+          {auth.isAdmin && <NavLink to={`/quan-tri?topic=${topicId}`} className={navClass}>Quản trị</NavLink>}
           <ThemeToggle />
         </div>
         {otherTopics.length > 0 && (
@@ -55,6 +58,7 @@ export function AppShell() {
         <div className="mx-auto max-w-5xl space-y-1 px-4 py-6 text-xs text-muted">
           <p>Tóm tắt tự động bằng AI, chỉ dựa trên nội dung bài gốc. Luôn đọc bài gốc trước khi ra quyết định đầu tư.</p>
           <p>Số liệu: U.S. Treasury, Bộ Tài chính Nhật, Yahoo Finance, EIA; lịch: Federal Reserve, Bank of Japan, FRED (Federal Reserve Bank of St. Louis).</p>
+          {!auth.isAdmin && <p><NavLink to="/dang-nhap" className="underline-offset-2 hover:underline">Đăng nhập quản trị</NavLink></p>}
         </div>
       </footer>
     </div>

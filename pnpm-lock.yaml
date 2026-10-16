@@ -11,6 +11,9 @@ importers:
       '@mozilla/readability':
         specifier: ^0.6.0
         version: 0.6.0
+      '@supabase/supabase-js':
+        specifier: ^2.117.3
+        version: 2.117.3
       linkedom:
         specifier: ^0.18.13
         version: 0.18.13
