@@ -1,7 +1,7 @@
 -- RLS / grants contract (docs/DESIGN.md §10.1). Run with: supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(15);
+select plan(19);
 
 -- ===== Public visitor =====
 set local role anon;
@@ -23,6 +23,27 @@ select throws_ok(
   $$ select public.record_ai_usage('groq-gpt-oss-120b', 'macro_finance', current_date, 1, 1) $$,
   '42501', null, 'anon cannot write AI usage'
 );
+
+select throws_ok($$ select * from public.due_editions() $$, '42501', null, 'anon cannot call the scheduler');
+
+-- ===== Scheduler: editions due at their local time, once per day =====
+reset role;
+select results_eq(
+  $$ select topic_id, edition_id from public.due_editions('2026-10-16 23:30:00+00') $$,
+  $$ values ('macro_finance'::text, 'morning'::text) $$,
+  '06:30 in Vietnam: the morning edition is due'
+);
+select is_empty(
+  $$ select 1 from public.due_editions('2026-10-17 13:00:00+00') where edition_id = 'pre_us' $$,
+  'pre_us is not due on a Saturday'
+);
+insert into public.crawl_runs (topic_id, edition_id, trigger, started_at, status)
+values ('macro_finance', 'morning', 'schedule', '2026-10-16 23:05:00+00', 'success');
+select is_empty(
+  $$ select 1 from public.due_editions('2026-10-16 23:30:00+00') $$,
+  'an edition that already ran today is not due again'
+);
+set local role anon;
 
 -- ===== Disabled topic disappears for the public =====
 reset role;

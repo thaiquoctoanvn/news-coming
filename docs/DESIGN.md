@@ -90,12 +90,21 @@ Netlify (static SPA): chọn topic → Bản tin · Lịch · Biểu đồ · C�
 
 ### 3.1 Lập lịch
 
+Migration `20261016000100_scheduler.sql`.
+
 - `editions` lưu `timezone`, `local_time`, `weekdays` → tự xử lý giờ mùa hè/đông (08:45 ET = 19:45 VN mùa hè, 20:45 VN mùa đông).
-- pg_cron chạy mỗi 5 phút một câu SQL nhẹ: edition nào đã đến giờ, chưa có `crawl_runs` thành công hôm nay, và topic + edition đều bật → dispatch. Không tốn gì khi không có việc.
-- Workflow chạy bằng `workflow_dispatch` không bị GitHub tắt sau 60 ngày repo không hoạt động.
-- GitHub `schedule` 1 lần/ngày làm dự phòng: worker tự kiểm tra và chạy bù edition bị lỡ.
-- Job hằng ngày giữ Supabase không bị pause (7 ngày không hoạt động).
+- `public.due_editions(now)`: edition đang bật của topic đang bật, đúng thứ trong tuần, trong vòng 6h sau giờ chạy, và hôm nay (theo múi giờ của edition) chưa có `crawl_runs` thành công/partial (hoặc đang chạy trong 1h gần nhất).
+- `public.dispatch_due_editions()`: chạy bởi **pg_cron mỗi 5 phút**; với mỗi edition đến hạn gọi GitHub API `workflow_dispatch` của `run.yml` (`command=edition`, `trigger=schedule`) qua **pg_net**. Tối đa 1 lần/30 phút và 3 lần/ngày mỗi edition (lần sau = thử lại khi lần trước lỗi). Ghi vào `schedule_dispatches`. Repo/workflow/ref lấy từ `app_settings.github_dispatch`.
+- Token GitHub **không nằm trong code/migration**: lưu một lần trong Supabase Vault tên `github_dispatch_token`. Chưa có token → hàm không làm gì.
+- Dự phòng: `run.yml` có `schedule` lúc 00:30 UTC (07:30 VN) và 14:15 UTC T2–T6 (sau 08:45 New York) chạy lệnh `catch-up` → chạy các edition đến hạn mà hôm nay chưa chạy (`trigger=backup`).
+- Dispatch từ pg_cron không bị GitHub tắt sau 60 ngày repo không hoạt động; job hằng ngày giữ Supabase không bị pause.
 - `concurrency` group theo topic để 2 lần chạy cùng topic không chồng nhau.
+
+**Cài đặt một lần (admin):**
+1. GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained** → chỉ repo `news-coming` → Repository permissions → **Actions: Read and write** → Generate (tài khoản phải có quyền ghi repo).
+2. Supabase → SQL Editor: `select vault.create_secret('<token>', 'github_dispatch_token', 'GitHub token for scheduled editions');`
+3. Kiểm tra: `select jobname, schedule from cron.job;` — sau giờ chạy: `select * from schedule_dispatches order by dispatched_at desc;` và `select status_code, content from net._http_response order by created desc limit 5;` (mong đợi 204).
+4. Token hết hạn → tạo token mới, `select vault.update_secret((select id from vault.secrets where name = 'github_dispatch_token'), '<token mới>');`
 
 ### 3.2 Ba loại dữ liệu trong một topic
 
@@ -241,12 +250,15 @@ Query Google News khởi điểm (mỗi query là 1 source):
 
 ### 7.2 Data modules
 
+Code: `apps/worker/src/modules/`. Chạy trước bước thu thập tin khi `editions.run_modules = true`, hoặc riêng bằng lệnh `modules`. Module lỗi không làm hỏng bản tin: lỗi ghi vào `crawl_runs.stats.modules`, dữ liệu cũ giữ nguyên.
+
+
 | Module | Loại | Nguồn | Ghi chú |
 |---|---|---|---|
-| `us_yields` | số liệu | Treasury Daily Yield Curve XML; dự phòng FRED (`DGS2`, `DGS10`, `DGS30`) | FRED key free |
+| `us_yields` | số liệu | Treasury Daily Yield Curve XML; dự phòng FRED (`DGS2`, `DGS10`, `DGS30`) nếu có `FRED_API_KEY` | FRED key free |
 | `jp_yields` | số liệu | MOF Japan `jgbcme.csv` | trễ 1 ngày làm việc |
-| `oil_price` | số liệu | Yahoo chart `CL=F`, `BZ=F` (gần realtime, **không chính thức**) → dự phòng EIA API v2 (`RWTC`, `RBRTE`) | EIA key free, trễ ~1 ngày |
-| `macro_calendar` | lịch | FOMC (HTML `fomccalendars.htm`), BLS `.ics`, lịch BEA, Treasury FiscalData `/v1/accounting/od/auctions_query`, lịch BOJ | |
+| `oil_price` | số liệu | Yahoo chart `CL=F`, `BZ=F` (gần realtime, **không chính thức**) → dự phòng EIA API v2 (`RWTC`, `RBRTE`) nếu có `EIA_API_KEY` | EIA key free, trễ ~1 ngày |
+| `macro_calendar` | lịch | FOMC (HTML `fomccalendars.htm`, 14:00 ET ngày cuối), BOJ (bảng lịch họp, ~12:00 Tokyo ngày cuối), đấu giá TPCP Mỹ 2–30 năm (FiscalData `upcoming_auctions`), CPI/NFP/PCE/PPI/GDP/JOLTS qua **FRED release calendar** (bls.gov chặn truy cập tự động; cần `FRED_API_KEY`) | Tên tiếng Việt từ bảng cố định trong code, không dùng AI. Lưu sự kiện từ 3 ngày trước tới 45 ngày tới |
 
 ---
 

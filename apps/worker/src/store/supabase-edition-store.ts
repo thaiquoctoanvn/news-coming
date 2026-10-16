@@ -45,7 +45,7 @@ class SupabaseEditionStore implements EditionStore {
   async loadEditionConfig(topicId: string, editionId: string): Promise<EditionConfig | null> {
     const [topic, edition, slots, categories, entities, modules] = await Promise.all([
       this.db.from('topics').select('id, name_vi, scoring_guide, ai_daily_request_cap, settings').eq('id', topicId).eq('enabled', true).maybeSingle(),
-      this.db.from('editions').select('id, timezone, size_max').eq('topic_id', topicId).eq('id', editionId).eq('enabled', true).maybeSingle(),
+      this.db.from('editions').select('id, timezone, size_max, run_modules').eq('topic_id', topicId).eq('id', editionId).eq('enabled', true).maybeSingle(),
       this.db.from('digest_slots').select('*').eq('topic_id', topicId).eq('enabled', true),
       this.db.from('categories').select('id, name_vi, description_en').eq('topic_id', topicId).eq('enabled', true).order('position'),
       this.db.from('entities').select('id, name').eq('topic_id', topicId).eq('enabled', true).order('position'),
@@ -57,7 +57,7 @@ class SupabaseEditionStore implements EditionStore {
     if (!topic.data || !edition.data) return null;
 
     const t = topic.data as { id: string; name_vi: string; scoring_guide: string; ai_daily_request_cap: number; settings: { pin?: { min_impact?: number; direction?: Direction; max?: number }; summary_words?: number } };
-    const e = edition.data as { id: string; timezone: string; size_max: number };
+    const e = edition.data as { id: string; timezone: string; size_max: number; run_modules: boolean };
     const pin = t.settings.pin;
     return {
       topic: {
@@ -68,7 +68,7 @@ class SupabaseEditionStore implements EditionStore {
         pin: pin?.min_impact !== undefined ? { minImpact: pin.min_impact, direction: pin.direction ?? 'negative', max: pin.max ?? 3 } satisfies PinRule : null,
         summaryWords: t.settings.summary_words ?? DEFAULT_SUMMARY_WORDS,
       },
-      edition: { id: e.id, timezone: e.timezone, sizeMax: e.size_max },
+      edition: { id: e.id, timezone: e.timezone, sizeMax: e.size_max, runModules: e.run_modules },
       slots: (slots.data as SlotDbRow[]).map((s): SlotConfig => ({
         id: s.id, position: s.position, kind: s.kind, categoryIds: s.category_ids, entityIds: s.entity_ids, maxItems: s.max_items,
         minScore: s.min_score, extraItemMinScore: s.extra_item_min_score, attachModules: s.attach_modules,
@@ -161,6 +161,12 @@ class SupabaseEditionStore implements EditionStore {
   async updateArticle(id: string, patch: ArticlePatch): Promise<void> {
     const { error } = await this.db.from('articles').update(toPatchRow(patch)).eq('id', id);
     if (error) throw new Error(`update article: ${error.message}`);
+  }
+
+  async loadDueEditions(): Promise<{ topicId: string; editionId: string }[]> {
+    const { data, error } = await this.db.rpc('due_editions');
+    if (error) throw new Error(`load due editions: ${error.message}`);
+    return (data as { topic_id: string; edition_id: string }[]).map((r) => ({ topicId: r.topic_id, editionId: r.edition_id }));
   }
 
   async loadClusterMembers(topicId: string, clusterKey: string, excludeId: string): Promise<ArticleRow[]> {

@@ -15,6 +15,8 @@ export interface EditionConfig {
     readonly id: string;
     readonly timezone: string;
     readonly sizeMax: number;
+    /** Refresh data modules (prices, yields, calendar) before collecting news. */
+    readonly runModules: boolean;
   };
   readonly slots: readonly SlotConfig[];
   readonly categories: readonly PromptRef[];
@@ -46,6 +48,8 @@ export interface EditionStore extends UsageStore {
   addDigestItems(digestId: string, items: readonly SelectedItem[]): Promise<void>;
   loadArticles(topicId: string, query: ArticleQuery): Promise<ArticleRow[]>;
   updateArticle(id: string, patch: ArticlePatch): Promise<void>;
+  /** Editions whose local time has come and that have not run today (scheduler backup). */
+  loadDueEditions(): Promise<{ topicId: string; editionId: string }[]>;
   /** Other outlets' articles about the same story (to replace an unreadable one as a whole). */
   loadClusterMembers(topicId: string, clusterKey: string, excludeId: string): Promise<ArticleRow[]>;
 }

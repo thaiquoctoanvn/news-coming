@@ -6,6 +6,8 @@ import type { ArticleRow, CollectStats, RunStatus, RunTrigger } from '../types.t
 import { type StepContext, scoreArticles, summarizeArticles, translateArticles } from './ai-steps.ts';
 import { type SourceFetcher, collectItems } from './collect.ts';
 import { type ArticleContent, ArticleReader } from './content-step.ts';
+import { type ModuleResult, runDataModules } from '../modules/run-modules.ts';
+import type { ModuleContext, ModuleStore } from '../modules/types.ts';
 
 // One edition of a topic (DESIGN.md §4–§5, §8.1): collect → score → select readable articles →
 // summarize → translate. Unfinished work stays in its status and is resumed by the next run.
@@ -23,12 +25,15 @@ export interface EditionOptions {
   readonly trigger: RunTrigger;
   readonly fetchSource: SourceFetcher;
   readonly keys: ApiKeys;
+  /** Data modules run first when the edition has run_modules; omitted in tests that only cover news. */
+  readonly modules?: { readonly store: ModuleStore; readonly context: Omit<ModuleContext, 'now'> };
   readonly fetchImpl?: FetchLike;
   readonly now?: Date;
   readonly sleep?: (ms: number) => Promise<void>;
 }
 
 export interface EditionStats {
+  readonly modules?: Record<string, ModuleResult>;
   readonly collect: CollectStats | null;
   readonly scored: number;
   readonly selected: number;
@@ -60,8 +65,11 @@ export async function runEdition(options: EditionOptions): Promise<EditionResult
   const runId = await store.startRun({ topicId, editionId, trigger: options.trigger });
   try {
     const now = options.now ?? new Date();
+    const modules = config.edition.runModules && options.modules
+      ? await runDataModules(topicId, options.modules.store, { ...options.modules.context, now })
+      : undefined;
     const collect = await collectItems(topicConfig, { store, fetchSource: options.fetchSource, now });
-    const stats = await processEdition(config, options, now, collect);
+    const stats = { ...(modules ? { modules } : {}), ...(await processEdition(config, options, now, collect)) };
     const status: RunStatus = collect.sourceErrors.length === 0 && stats.aiStopped === null ? 'success' : 'partial';
     await store.finishRun(runId, { status, stats, error: null });
     log.info('edition finished', { topicId, editionId, status, ...stats, collect: undefined });
