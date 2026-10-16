@@ -1,7 +1,6 @@
-import {
-  JINA_MIN_INTERVAL_MS, type FetchLike, decodeGoogleNewsUrl, isGoogleNewsUrl, isPaywalled, readDirect, readWithJina,
-} from '../shared.ts';
-import type { ArticleRow } from '../types.ts';
+import type { FetchLike } from '../ai/providers.ts';
+import { JINA_MIN_INTERVAL_MS, decodeGoogleNewsUrl, isGoogleNewsUrl, isPaywalled, readDirect, readWithJina } from '../content.ts';
+import type { ArticleRow } from './types.ts';
 
 // Reads each article's own text (DESIGN.md §8.1): the publisher page directly first, then Jina Reader.
 // An article is never paired with another article's text: when it cannot be read, the caller

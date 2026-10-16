@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { localDate, runEdition } from '../src/pipeline/edition.ts';
-import type { AiProvider } from '../src/shared.ts';
-import type { EditionConfig } from '../src/store/edition-store.ts';
+import { AiRouter, type AiProvider, ArticleReader, addMoreToDigest } from '../src/shared.ts';
+import type { EditionConfig } from '../src/shared.ts';
 import { MemoryStore } from '../src/store/memory-store.ts';
 import type { RawItem, Source, TopicConfig } from '../src/types.ts';
 import { MemoryEditionStore } from './helpers/memory-edition-store.ts';
@@ -27,6 +27,7 @@ const editionConfig: EditionConfig = {
   topic: {
     id: 'macro_finance', name: 'Macro', scoringGuide: 'guide', aiDailyRequestCap: 60,
     pin: { minImpact: 9, direction: 'negative', max: 3 }, summaryWords: 350,
+    moreBatchSize: 2, refreshSize: 2, dailyCapMore: 5, dailyCapRefresh: 3,
   },
   edition: { id: 'morning', timezone: 'Asia/Ho_Chi_Minh', sizeMax: 3, runModules: false },
   slots: [
@@ -201,5 +202,52 @@ describe('runEdition', () => {
     });
 
     expect(result).toEqual({ status: 'skipped', stats: null });
+  });
+});
+
+describe('adding items to an existing digest', () => {
+  const moreItems: RawItem[] = [
+    { url: 'https://news.example/5', title: 'Oil tanker insurance costs jump in the Gulf', publisher: 'E', publishedAt: hoursAgo(1) },
+    { url: 'https://news.example/6', title: 'Fed minutes show debate over balance sheet', publisher: 'F', publishedAt: hoursAgo(1) },
+    { url: 'https://news.example/7', title: 'Oil refiners cut runs as margins shrink', publisher: 'G', publishedAt: hoursAgo(1) },
+  ];
+
+  test('"Xem thêm" appends the best remaining readable item of the window, summarized and translated', async () => {
+    const services = fakeServices();
+    const { editionStore, run } = setup(services);
+    await run();
+
+    const result = await addMoreToDigest({
+      store: editionStore,
+      router: new AiRouter({ providers, keys: { groq: 'k', gemini: 'k' }, usage: editionStore, topicId: 'macro_finance', topicDailyCap: 60, fetchImpl: services.fetchImpl }),
+      reader: new ArticleReader({ fetchImpl: services.fetchImpl, sleep: async () => {} }),
+      log: { info: () => {}, warn: () => {} },
+      digestId: editionStore.digests[0]!.id,
+      now: NOW,
+    });
+
+    expect(result).toEqual({ added: 1, unreadable: 0, summarized: 1, translated: 1, rejected: 0, aiStopped: null });
+    const items = editionStore.digests[0]!.items;
+    expect(items.at(-1)).toMatchObject({ position: 4, addedBy: 'more' });
+    expect(editionStore.rows().find((a) => a.id === items.at(-1)?.articleId)?.title).toBe('Fed official speaks about inflation');
+  });
+
+  test('"Cập nhật tin mới" (refresh) appends new items collected after the digest instead of skipping', async () => {
+    const services = fakeServices();
+    const store = new MemoryStore([topicConfig]);
+    const editionStore = new MemoryEditionStore(store, editionConfig, providers);
+    const base = {
+      store, editionStore, topicId: 'macro_finance', editionId: 'morning', trigger: 'manual' as const,
+      keys: { groq: 'k', gemini: 'k' }, fetchImpl: services.fetchImpl, now: NOW, sleep: async () => {},
+    };
+    await runEdition({ ...base, fetchSource: async () => [...items] });
+
+    const skipped = await runEdition({ ...base, fetchSource: async () => [...items, ...moreItems] });
+    const refreshed = await runEdition({ ...base, fetchSource: async () => [...items, ...moreItems], refresh: true });
+
+    expect(skipped.stats).toMatchObject({ selected: 0 });
+    expect(refreshed.stats).toMatchObject({ selected: 2, translated: 2 });
+    const added = editionStore.digests[0]!.items.filter((i) => i.addedBy === 'refresh');
+    expect(added.map((i) => i.position)).toEqual([4, 5]);
   });
 });

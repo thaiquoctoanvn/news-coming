@@ -1,7 +1,9 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { AiProvider, Direction, PinRule, SelectedItem, SlotConfig, SlotKind, UsageTotals } from '../shared.ts';
-import type { ArticlePatch, ArticleRow, ArticleStatus } from '../types.ts';
-import type { ArticleQuery, EditionConfig, EditionStore, NewDigest } from './edition-store.ts';
+import type { AiProvider } from '../ai/providers.ts';
+import type { UsageTotals } from '../ai/router.ts';
+import type { Direction, PinRule, SelectedItem, SlotConfig, SlotKind } from '../selection.ts';
+import type { ArticlePatch, ArticleRow, ArticleStatus } from './types.ts';
+import type { AddedBy, ArticleQuery, DigestInfo, DigestItemInfo, EditionConfig, EditionStore, NewDigest } from './edition-store.ts';
 
 const ARTICLE_COLUMNS = [
   'id', 'topic_id', 'url', 'source_name', 'title', 'description', 'status', 'category_id', 'entity_id', 'authority',
@@ -18,6 +20,15 @@ interface ArticleDbRow {
   cluster_key: string | null; published_at: string | null; fetched_at: string; impact: number | null;
   direction: Direction | null; explains: string | null; final_score: number | null; story_key: string | null;
   content_snippet: string | null; summary_en: string | null;
+}
+
+interface TopicSettings {
+  pin?: { min_impact?: number; direction?: Direction; max?: number };
+  summary_words?: number;
+  more_batch_size?: number;
+  refresh_size?: number;
+  daily_cap_more?: number;
+  daily_cap_refresh?: number;
 }
 
 interface SlotDbRow {
@@ -56,7 +67,7 @@ class SupabaseEditionStore implements EditionStore {
     }
     if (!topic.data || !edition.data) return null;
 
-    const t = topic.data as { id: string; name_vi: string; scoring_guide: string; ai_daily_request_cap: number; settings: { pin?: { min_impact?: number; direction?: Direction; max?: number }; summary_words?: number } };
+    const t = topic.data as { id: string; name_vi: string; scoring_guide: string; ai_daily_request_cap: number; settings: TopicSettings };
     const e = edition.data as { id: string; timezone: string; size_max: number; run_modules: boolean };
     const pin = t.settings.pin;
     return {
@@ -67,6 +78,10 @@ class SupabaseEditionStore implements EditionStore {
         aiDailyRequestCap: t.ai_daily_request_cap,
         pin: pin?.min_impact !== undefined ? { minImpact: pin.min_impact, direction: pin.direction ?? 'negative', max: pin.max ?? 3 } satisfies PinRule : null,
         summaryWords: t.settings.summary_words ?? DEFAULT_SUMMARY_WORDS,
+        moreBatchSize: t.settings.more_batch_size ?? 4,
+        refreshSize: t.settings.refresh_size ?? 6,
+        dailyCapMore: t.settings.daily_cap_more ?? 5,
+        dailyCapRefresh: t.settings.daily_cap_refresh ?? 3,
       },
       edition: { id: e.id, timezone: e.timezone, sizeMax: e.size_max, runModules: e.run_modules },
       slots: (slots.data as SlotDbRow[]).map((s): SlotConfig => ({
@@ -137,12 +152,36 @@ class SupabaseEditionStore implements EditionStore {
     return (data as { id: string }).id;
   }
 
-  async addDigestItems(digestId: string, items: readonly SelectedItem[]): Promise<void> {
+  async addDigestItems(digestId: string, items: readonly SelectedItem[], addedBy: AddedBy = 'auto'): Promise<void> {
     if (items.length === 0) return;
     const { error } = await this.db.from('digest_items').insert(items.map((item) => ({
-      digest_id: digestId, article_id: item.articleId, position: item.position, slot_id: item.slotId, is_pinned: item.isPinned,
+      digest_id: digestId, article_id: item.articleId, position: item.position, slot_id: item.slotId, is_pinned: item.isPinned, added_by: addedBy,
     })));
     if (error) throw new Error(`add digest items: ${error.message}`);
+  }
+
+  async loadDigest(digestId: string): Promise<DigestInfo | null> {
+    const { data, error } = await this.db.from('digests').select('id, topic_id, edition_id, digest_date, window_start, window_end')
+      .eq('id', digestId).maybeSingle();
+    if (error) throw new Error(`load digest: ${error.message}`);
+    if (!data) return null;
+    const d = data as { id: string; topic_id: string; edition_id: string; digest_date: string; window_start: string; window_end: string };
+    return {
+      id: d.id, topicId: d.topic_id, editionId: d.edition_id, digestDate: d.digest_date,
+      windowStart: new Date(d.window_start), windowEnd: new Date(d.window_end),
+    };
+  }
+
+  async loadDigestItems(digestId: string): Promise<DigestItemInfo[]> {
+    const { data, error } = await this.db.from('digest_items').select('article_id, position, articles(story_key)').eq('digest_id', digestId);
+    if (error) throw new Error(`load digest items: ${error.message}`);
+    return (data as unknown as { article_id: string; position: number; articles: { story_key: string | null } | null }[])
+      .map((r) => ({ articleId: r.article_id, position: r.position, storyKey: r.articles?.story_key ?? null }));
+  }
+
+  async updateDigestWindowEnd(digestId: string, windowEnd: Date): Promise<void> {
+    const { error } = await this.db.from('digests').update({ window_end: windowEnd.toISOString() }).eq('id', digestId);
+    if (error) throw new Error(`update digest window: ${error.message}`);
   }
 
   async loadArticles(topicId: string, query: ArticleQuery): Promise<ArticleRow[]> {

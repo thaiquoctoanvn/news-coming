@@ -8,3 +8,8 @@ export * from '../../../supabase/functions/_shared/faithfulness.ts';
 export * from '../../../supabase/functions/_shared/prompts.ts';
 export * from '../../../supabase/functions/_shared/scoring.ts';
 export * from '../../../supabase/functions/_shared/selection.ts';
+export * from '../../../supabase/functions/_shared/pipeline/ai-steps.ts';
+export * from '../../../supabase/functions/_shared/pipeline/edition-store.ts';
+export * from '../../../supabase/functions/_shared/pipeline/reader.ts';
+export * from '../../../supabase/functions/_shared/pipeline/supabase-edition-store.ts';
+export * from '../../../supabase/functions/_shared/pipeline/more.ts';

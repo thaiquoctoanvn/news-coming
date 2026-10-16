@@ -5,6 +5,7 @@ import { EmptyState, ErrorState, LoadingCards } from '../../components/States.ts
 import { chooseDigest, groupArticles } from '../../lib/digest.ts';
 import { formatDigestDate } from '../../lib/format.ts';
 import { useCategories, useDigestArticles, useDigests, useEditions, useSlots } from '../../lib/queries.ts';
+import { AdminDigestActions } from './AdminDigestActions.tsx';
 import { DigestItemCard } from './DigestItemCard.tsx';
 import { MarketStrip } from './MarketStrip.tsx';
 import { UpcomingEvents } from './UpcomingEvents.tsx';
@@ -65,6 +66,7 @@ export function DigestPage() {
         <EmptyState title="Chưa có bản tin">Bản tin sáng được tạo lúc 06:00 và bản trước phiên Mỹ lúc 08:45 giờ New York.</EmptyState>
       )}
       {choice.digest && <DigestArticles topicId={topicId} digestId={choice.digest.id} />}
+      {choice.digest && <AdminDigestActions digestId={choice.digest.id} />}
     </div>
   );
 }

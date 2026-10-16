@@ -10,6 +10,7 @@ import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router/dom';
 import { router } from './App.tsx';
 import { applyTheme, initialTheme } from './components/ThemeToggle.tsx';
+import { AuthProvider } from './lib/auth.tsx';
 import { readEnv } from './lib/env.ts';
 import { SupabaseContext, createSupabase } from './lib/supabase.ts';
 
@@ -31,7 +32,9 @@ if (!env) {
     <StrictMode>
       <SupabaseContext.Provider value={createSupabase(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY)}>
         <QueryClientProvider client={queryClient}>
-          <RouterProvider router={router} />
+          <AuthProvider>
+            <RouterProvider router={router} />
+          </AuthProvider>
         </QueryClientProvider>
       </SupabaseContext.Provider>
     </StrictMode>,

@@ -8,13 +8,13 @@ import { collectTopic } from './pipeline/collect.ts';
 import { runEdition } from './pipeline/edition.ts';
 import { type ApiKeys, callProvider, hasKey } from './shared.ts';
 import { fetchSource } from './sources/index.ts';
-import { createSupabaseEditionStore } from './store/supabase-edition-store.ts';
+import { createSupabaseEditionStore } from './shared.ts';
 import { createSupabaseModuleStore } from './store/supabase-module-store.ts';
 import { createSupabaseStore } from './store/supabase-store.ts';
 import type { RunTrigger } from './types.ts';
 
 // Usage:
-//   node src/index.ts edition   --edition <id> [--topic <id>|all] [--trigger manual|schedule|backup]
+//   node src/index.ts edition   --edition <id> [--topic <id>|all] [--trigger manual|schedule|backup] [--refresh]
 //   node src/index.ts collect   [--topic <id>|all]        (news only, no AI)
 //   node src/index.ts modules   [--topic <id>|all]        (prices, yields, calendar only)
 //   node src/index.ts catch-up                            (runs editions that are due but did not run today)
@@ -29,6 +29,7 @@ async function main(): Promise<void> {
       topic: { type: 'string', default: 'all' },
       edition: { type: 'string' },
       trigger: { type: 'string', default: 'manual' },
+      refresh: { type: 'boolean', default: false },
     },
   });
   const trigger = values.trigger as RunTrigger;
@@ -39,7 +40,7 @@ async function main(): Promise<void> {
     case 'edition': {
       const editionId = values.edition;
       if (!editionId) throw new Error('edition requires --edition <id>');
-      return forEachTopic(env, values.topic, (topicId) => edition(env, topicId, editionId, trigger));
+      return forEachTopic(env, values.topic, (topicId) => edition(env, topicId, editionId, trigger, values.refresh));
     }
     case 'collect':
       return forEachTopic(env, values.topic, (topicId) => collectTopic({
@@ -61,13 +62,14 @@ async function main(): Promise<void> {
   }
 }
 
-function edition(env: Env, topicId: string, editionId: string, trigger: RunTrigger) {
+function edition(env: Env, topicId: string, editionId: string, trigger: RunTrigger, refresh = false) {
   return runEdition({
     store: createSupabaseStore(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY),
     editionStore: createSupabaseEditionStore(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY),
     topicId,
     editionId,
     trigger,
+    refresh,
     fetchSource: sourceFetcher(env),
     keys: apiKeys(env),
     modules: { store: createSupabaseModuleStore(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY), context: moduleContext(env) },

@@ -3,6 +3,8 @@ import { AppShell } from './components/AppShell.tsx';
 import { EmptyState, ErrorState, LoadingCards } from './components/States.tsx';
 import { CalendarPage } from './features/calendar/CalendarPage.tsx';
 import { DigestPage } from './features/digest/DigestPage.tsx';
+import { AdminLayout } from './features/admin/AdminLayout.tsx';
+import { LoginPage } from './features/auth/LoginPage.tsx';
 import { useTopics } from './lib/queries.ts';
 
 function HomeRedirect() {
@@ -37,6 +39,16 @@ export const router = createBrowserRouter([
         path: 'bieu-do',
         lazy: async () => ({ Component: (await import('./features/charts/ChartsPage.tsx')).ChartsPage }),
       },
+    ],
+  },
+  { path: '/dang-nhap', element: <LoginPage />, errorElement: <RouteError /> },
+  {
+    path: '/quan-tri',
+    element: <AdminLayout />,
+    errorElement: <RouteError />,
+    children: [
+      { index: true, lazy: async () => ({ Component: (await import('./features/admin/OperationsPage.tsx')).OperationsPage }) },
+      { path: 'cau-hinh', lazy: async () => ({ Component: (await import('./features/admin/ConfigPage.tsx')).ConfigPage }) },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },

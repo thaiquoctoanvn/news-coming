@@ -26,6 +26,10 @@ on:
         type: choice
         options: [manual, schedule, backup]
         default: manual
+      refresh:
+        description: For "edition" when today's digest exists, add new items to it ("Cập nhật tin mới")
+        type: boolean
+        default: false
   schedule:
     - cron: '30 0 * * *'     # 07:30 Vietnam — after the 06:00 morning edition
     - cron: '15 14 * * 1-5'  # 09:15–10:15 New York — after the 08:45 pre_us edition
@@ -72,9 +76,10 @@ jobs:
           TOPIC: ${{ inputs.topic || 'all' }}
           EDITION: ${{ inputs.edition || 'morning' }}
           TRIGGER: ${{ inputs.trigger || 'backup' }}
+          REFRESH: ${{ (inputs.refresh == true || inputs.refresh == 'true') && '--refresh' || '' }}
         run: |
           case "$COMMAND" in
-            edition)   node src/index.ts edition --topic "$TOPIC" --edition "$EDITION" --trigger "$TRIGGER" ;;
+            edition)   node src/index.ts edition --topic "$TOPIC" --edition "$EDITION" --trigger "$TRIGGER" $REFRESH ;;
             collect)   node src/index.ts collect --topic "$TOPIC" --trigger "$TRIGGER" ;;
             modules)   node src/index.ts modules --topic "$TOPIC" ;;
             catch-up)  node src/index.ts catch-up ;;

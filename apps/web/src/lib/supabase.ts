@@ -2,8 +2,10 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createContext, useContext } from 'react';
 
 export function createSupabase(url: string, anonKey: string): SupabaseClient {
-  // The public site never signs in; admin login arrives in Phase 6.
-  return createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  // Visitors never sign in. The admin session is kept by supabase-js in localStorage (a static
+  // SPA has no server to set httpOnly cookies — see .agents/rules/README.md "Project overrides");
+  // every write is still enforced in Postgres by RLS + is_admin().
+  return createClient(url, anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
 }
 
 export const SupabaseContext = createContext<SupabaseClient | null>(null);

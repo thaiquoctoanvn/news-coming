@@ -1,10 +1,13 @@
-import { log } from '../log.ts';
+import type { AiRouter } from '../ai/router.ts';
+import { unsupportedNumbers } from '../faithfulness.ts';
+import type { Logger } from '../log.ts';
 import {
-  type AiRouter, type PromptTopic, finalScore, preRank, scoringPrompt, scoringSchema, summaryPrompt, summarySchema,
-  suspiciousTranslationWords, translationPrompt, translationSchema, unsupportedNumbers,
-} from '../shared.ts';
-import type { EditionStore } from '../store/edition-store.ts';
-import type { ArticleRow } from '../types.ts';
+  type PromptTopic, scoringPrompt, scoringSchema, summaryPrompt, summarySchema, suspiciousTranslationWords,
+  translationPrompt, translationSchema,
+} from '../prompts.ts';
+import { finalScore, preRank } from '../scoring.ts';
+import type { EditionStore } from './edition-store.ts';
+import type { ArticleRow } from './types.ts';
 
 // AI stages of an edition. Each stage processes articles in one status and moves them to the next,
 // so an interrupted run (quota, error) resumes on the next run without repeating finished work.
@@ -19,6 +22,7 @@ export interface StepContext {
   readonly router: AiRouter;
   readonly topic: PromptTopic & { readonly id: string; readonly summaryWords: number };
   readonly now: Date;
+  readonly log: Logger;
 }
 
 function batches<T>(items: readonly T[], size: number): T[][] {
@@ -85,7 +89,7 @@ export async function summarizeArticles(ctx: StepContext, articles: readonly Art
       }
       if (invented.length > 0) {
         rejected++;
-        log.warn('summary rejected: numbers not in source', { articleId: article.id, numbers: invented });
+        ctx.log.warn('summary rejected: numbers not in source', { articleId: article.id, numbers: invented });
         await ctx.store.updateArticle(article.id, { status: 'failed', error: `unfaithful summary: numbers ${invented.join(', ')} not in source` });
         continue;
       }
@@ -121,11 +125,11 @@ export async function translateArticles(ctx: StepContext, articles: readonly Art
       const problems = translationProblems(article, final);
       if (problems.numbers.length > 0) {
         rejected++;
-        log.warn('translation rejected: numbers not in summary', { articleId: article.id, numbers: problems.numbers });
+        ctx.log.warn('translation rejected: numbers not in summary', { articleId: article.id, numbers: problems.numbers });
         await ctx.store.updateArticle(article.id, { status: 'failed', error: `unfaithful translation: numbers ${problems.numbers.join(', ')}` });
         continue;
       }
-      if (problems.garbled.length > 0) log.warn('translation still has suspicious words', { articleId: article.id, words: problems.garbled });
+      if (problems.garbled.length > 0) ctx.log.warn('translation still has suspicious words', { articleId: article.id, words: problems.garbled });
       await ctx.store.updateArticle(article.id, {
         status: 'translated', titleVi: final.title_vi, summaryVi: final.summary_vi, translatedAt: ctx.now,
       });
@@ -143,7 +147,7 @@ interface Translation {
 async function translateBatch(ctx: StepContext, batch: readonly ArticleRow[]): Promise<Map<ArticleRow, Translation>> {
   const request = translationPrompt(batch.map((a, i) => ({ id: String(i + 1), title: a.title, summary: a.summaryEn ?? a.title })));
   const { data, providerId } = await ctx.router.complete('translate', request, translationSchema);
-  log.info('translated batch', { provider: providerId, items: batch.length });
+  ctx.log.info('translated batch', { provider: providerId, items: batch.length });
   const results = new Map<ArticleRow, Translation>();
   for (const result of data.items) {
     const article = batch[Number(result.id) - 1];

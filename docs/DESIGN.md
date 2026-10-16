@@ -205,10 +205,18 @@ Thứ tự hiển thị: tin ghim → slot theo `position`.
 
 ---
 
-## 6. "Xem thêm" và "Cập nhật tin mới"
+## 6. "Xem thêm" và "Cập nhật tin mới" (đã làm, Phase 6)
 
 | Nút | Cơ chế | Chi phí | Thời gian |
 |---|---|---|---|
+| Xem thêm (cuối trang bản tin, chỉ admin) | Edge Function `more-news(digestId)` → `addMoreToDigest` (`_shared/pipeline/more.ts`): tin `scored` trong khung giờ của digest, điểm cao nhất, khác `story_key` đã có, **đọc được** (thay vì ghép bài khác) → tóm tắt + dịch + kiểm tra trung thực → `digest_items.added_by = 'more'`. Mặc định 4 tin/lần (`settings.more_batch_size`) để vừa giới hạn 150s của Edge Function với 8K token/phút của Groq | ~2 request tóm tắt + 2 dịch | 1–2 phút |
+| Cập nhật tin mới (trang Vận hành) | Edge Function `trigger-refresh(topicId, editionId)` → GitHub `workflow_dispatch` `run.yml` với `refresh=true` → worker `edition --refresh`: thu thập + chấm điểm tin mới từ cuối khung giờ cũ, thêm tối đa `settings.refresh_size` (6) tin đọc được vào bản tin hôm nay (`added_by = 'refresh'`), dời `window_end` | ~7–9 request | 5–15 phút |
+
+- Giới hạn lượt/ngày theo topic (`settings.daily_cap_more`, `daily_cap_refresh`), trừ atomic bằng `use_action_quota()` (chỉ service_role).
+- Hết quota AI giữa chừng → tin đã chọn giữ trạng thái `selected`/`summarized`, lần chạy kế tiếp làm nốt.
+- Code lõi pipeline (AI steps, đọc bài, store, more) nằm ở `supabase/functions/_shared/pipeline/`, dùng chung cho worker (Node) và Edge Functions (Deno; import map ở `supabase/functions/*/deno.json`). CI có job `deno check` cho cả 3 function.
+
+---|---|---|---|
 | Xem thêm | Edge Function `more-news(digest_id)`: lấy 5–8 tin `scored` tiếp theo của digest đó → tóm tắt + dịch → thêm `digest_items` (`added_by = 'more'`) | ~2 req | 10–20 s |
 | Cập nhật tin mới | Edge Function `trigger-refresh(topic_id)` → `workflow_dispatch` → pipeline cho cửa sổ từ lần chạy trước; web theo dõi qua Realtime | ~7–9 req | 2–3 phút |
 
@@ -340,19 +348,19 @@ $$;
 | `crawl_runs`, `ai_usage`, `action_quota` | — | select | service_role |
 | `login_attempts` | — | — | chỉ Edge Function |
 
-### 10.2 Đăng nhập
+### 10.2 Đăng nhập (đã làm, Phase 6)
 
-1. Web gửi username → Edge Function `request-otp`.
-2. Function: rate-limit theo IP hash (5 lần/giờ) → so sánh với secret `ADMIN_USERNAME` → nếu khớp gọi `signInWithOtp({ email: ADMIN_EMAIL, options: { shouldCreateUser: false } })`.
-3. Luôn trả cùng một thông báo → không dò được username. Email đích không xuống frontend.
-4. Web gọi `verifyOtp` với mã 6 số → session.
-5. Session 15 ngày: enforce ở DB qua `is_admin()` (time-box của Supabase là tính năng trả phí); web tự `signOut()` khi quá hạn.
+Edge Function `admin-login` làm **cả hai bước** trên server, nên email admin không bao giờ xuống trình duyệt:
+1. `{action: "request", username}`: giới hạn 5 lần/giờ/IP (IP được băm bằng `LOGIN_HASH_SALT`, ghi `login_attempts`); so username với `ADMIN_USERNAME` (so sánh thời gian hằng); đúng thì `signInWithOtp(ADMIN_EMAIL, shouldCreateUser: false)`. Luôn trả cùng một câu → không dò được username.
+2. `{action: "verify", code}`: giới hạn 10 lần/giờ/IP; `verifyOtp(ADMIN_EMAIL, code)` → trả `access_token`/`refresh_token`, web gọi `setSession`.
+3. Phiên 15 ngày: kiểm ở DB (`is_admin()`), ở Edge Functions (`last_sign_in_at`) và ở web (tự đăng xuất).
 
 Cấu hình Supabase Auth:
-- Tắt **Allow new users to sign up**; tạo sẵn 1 user `ADMIN_EMAIL`.
-- OTP 6 số, hết hạn 600s; template dùng `{{ .Token }}`.
-- Custom SMTP = Resend: host `smtp.resend.com`, port `465`, user `resend`, password = Resend API key, sender `noreply@<domain>`.
-- Resend: verify domain (SPF + DKIM). Free 100 email/ngày, 3.000/tháng.
+- Tắt **Allow new users to sign up**; tạo sẵn 1 user `ADMIN_EMAIL` (Auto Confirm).
+- OTP 6 số, hết hạn 600s; mẫu **Magic Link** dùng `{{ .Token }}`.
+- Custom SMTP = **Resend không cần domain**: host `smtp.resend.com`, port `465`, user `resend`, password = API key, sender **`onboarding@resend.dev`**. Với domain mặc định này Resend **chỉ gửi tới email đã đăng ký tài khoản Resend** → `ADMIN_EMAIL` phải đúng là email đó (quyết định của user ngày 2026-10-17). Free 100 email/ngày.
+- Secrets của Edge Functions: `ADMIN_USERNAME`, `ADMIN_EMAIL`, `LOGIN_HASH_SALT`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `GITHUB_DISPATCH_TOKEN` (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` có sẵn).
+- `supabase/config.toml`: `verify_jwt = false` cho 3 function (chúng tự kiểm tra; khóa publishable mới không phải JWT).
 
 ### 10.3 Repo public
 
@@ -401,6 +409,16 @@ Code: `apps/web` (Vite 8 + React 19 + HeroUI v3 + Tailwind v4 + TanStack Query +
 - Nội dung luôn render dạng text (không `dangerouslySetInnerHTML`), link chỉ nhận http(s).
 - Bundle: JS chính ~241KB gzip, trang biểu đồ tách riêng ~105KB gzip.
 - Deploy: bước 3 của `deploy.yml` (build với GitHub Variables `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` → `netlify deploy --prod`).
+
+### 11.2 Đã làm (Phase 6 — admin)
+
+| Route | Nội dung |
+|---|---|
+| `/dang-nhap` | Username → mã 6 số (InputOTP) |
+| `/quan-tri?topic=` | Vận hành: nút Cập nhật tin mới theo edition, lượng dùng AI hôm nay so hạn mức, lượt bấm đã dùng, lần pg_cron gọi GitHub, 15 lần chạy gần nhất (chấm/chọn/dịch/bỏ/loại, lỗi), nguồn đang lỗi |
+| `/quan-tri/cau-hinh?topic=` | Bảng sửa trực tiếp (công tắc lưu ngay, ô chữ lưu khi rời ô): chủ đề (bật/tắt, quota, độ dài tóm tắt, lượt nút, từ khóa loại trừ), bản tin (giờ, thứ, kích thước), slot, danh mục, tổ chức, nguồn (thêm/xóa, lỗi gần nhất), module số liệu, model AI |
+
+Admin đăng nhập thấy thêm link "Quản trị" ở header và nút "Xem thêm tin" cuối mỗi bản tin. Mọi thao tác ghi đều chạy với quyền admin nên RLS vẫn chặn khi phiên quá 15 ngày.
 
 ## 12. Cấu trúc repo
 

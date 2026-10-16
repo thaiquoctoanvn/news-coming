@@ -1,13 +1,14 @@
 import { errorMessage, log } from '../log.ts';
-import { AiRouter, AiUnavailableError, type ApiKeys, type FetchLike, type SelectedItem, type SelectionCandidate, selectDigest } from '../shared.ts';
-import type { EditionConfig, EditionStore } from '../store/edition-store.ts';
-import type { Store } from '../store/store.ts';
-import type { ArticleRow, CollectStats, RunStatus, RunTrigger } from '../types.ts';
-import { type StepContext, scoreArticles, summarizeArticles, translateArticles } from './ai-steps.ts';
-import { type SourceFetcher, collectItems } from './collect.ts';
-import { type ArticleContent, ArticleReader } from './content-step.ts';
 import { type ModuleResult, runDataModules } from '../modules/run-modules.ts';
 import type { ModuleContext, ModuleStore } from '../modules/types.ts';
+import {
+  AiRouter, AiUnavailableError, type ApiKeys, type ArticleContent, ArticleReader, type EditionConfig, type EditionStore,
+  type FetchLike, type SelectedItem, type SelectionCandidate, type StepContext, appendReadableArticles, minimumScore,
+  scoreArticles, selectDigest, summarizeArticles, translateArticles,
+} from '../shared.ts';
+import type { Store } from '../store/store.ts';
+import type { ArticleRow, CollectStats, RunStatus, RunTrigger } from '../types.ts';
+import { type SourceFetcher, collectItems } from './collect.ts';
 
 // One edition of a topic (DESIGN.md §4–§5, §8.1): collect → score → select readable articles →
 // summarize → translate. Unfinished work stays in its status and is resumed by the next run.
@@ -30,6 +31,8 @@ export interface EditionOptions {
   readonly fetchImpl?: FetchLike;
   readonly now?: Date;
   readonly sleep?: (ms: number) => Promise<void>;
+  /** "Cập nhật tin mới": when today's digest exists, append new readable items instead of skipping. */
+  readonly refresh?: boolean;
 }
 
 export interface EditionStats {
@@ -95,7 +98,7 @@ async function processEdition(config: EditionConfig, options: EditionOptions, no
     onEvent: (message, fields) => log.warn(message, fields),
   });
   const ctx: StepContext = {
-    store, router, now,
+    store, router, now, log,
     topic: { ...config.topic, categories: config.categories, entities: config.entities, modules: config.modules },
   };
   const reader = new ArticleReader({ fetchImpl, ...sleep });
@@ -104,7 +107,7 @@ async function processEdition(config: EditionConfig, options: EditionOptions, no
 
   try {
     counts.scored = await scoreArticles(ctx, await store.loadArticles(config.topic.id, { statuses: ['raw'], fetchedSince: windowStart }));
-    counts = { ...counts, ...(await selectEdition(config, store, reader, windowStart, now)) };
+    counts = { ...counts, ...(await selectEdition(config, store, reader, windowStart, now, options.refresh ?? false)) };
     const summaries = await summarizeArticles(ctx, await store.loadArticles(config.topic.id, { statuses: ['selected'] }));
     counts = { ...counts, summarized: summaries.done, rejected: summaries.rejected };
     const translations = await translateArticles(ctx, await store.loadArticles(config.topic.id, { statuses: ['summarized'] }));
@@ -129,12 +132,16 @@ interface SelectionCounts {
  * report of the same story from another outlet, or dropped so the slot takes its next candidate.
  */
 async function selectEdition(
-  config: EditionConfig, store: EditionStore, reader: ArticleReader, windowStart: Date, now: Date,
+  config: EditionConfig, store: EditionStore, reader: ArticleReader, windowStart: Date, now: Date, refresh: boolean,
 ): Promise<SelectionCounts> {
   const digestDate = localDate(now, config.edition.timezone);
-  if (await store.findDigestId(config.topic.id, config.edition.id, digestDate)) {
-    log.info('digest already exists, only finishing pending items', { digestDate });
-    return { selected: 0, replaced: 0, dropped: 0 };
+  const existingId = await store.findDigestId(config.topic.id, config.edition.id, digestDate);
+  if (existingId) {
+    if (!refresh) {
+      log.info('digest already exists, only finishing pending items', { digestDate });
+      return { selected: 0, replaced: 0, dropped: 0 };
+    }
+    return appendToDigest(config, store, reader, existingId, windowStart, now);
   }
 
   const pool = new Map((await store.loadArticles(config.topic.id, { statuses: ['scored'], fetchedSince: windowStart })).map((a) => [a.id, a]));
@@ -179,6 +186,21 @@ async function selectEdition(
     await store.updateArticle(pick.articleId, { status: 'selected', contentSnippet: content?.text ?? '', originalUrl: content?.originalUrl ?? null });
   }
   return { selected: readable.length, replaced, dropped };
+}
+
+/** "Cập nhật tin mới": appends the best new readable items scored since the last digest window. */
+async function appendToDigest(
+  config: EditionConfig, store: EditionStore, reader: ArticleReader, digestId: string, windowStart: Date, now: Date,
+): Promise<SelectionCounts> {
+  const digest = await store.loadDigest(digestId);
+  if (!digest) return { selected: 0, replaced: 0, dropped: 0 };
+  const candidates = await store.loadArticles(config.topic.id, { statuses: ['scored'], fetchedSince: windowStart });
+  const { added, unreadable } = await appendReadableArticles({
+    store, reader, digest, candidates, count: config.topic.refreshSize, minScore: minimumScore(config), addedBy: 'refresh',
+  });
+  await store.updateDigestWindowEnd(digestId, new Date(Math.max(now.getTime(), Date.now())));
+  log.info('refresh: appended to digest', { digestId, added: added.length, unreadable });
+  return { selected: added.length, replaced: 0, dropped: unreadable };
 }
 
 /** A readable article from another outlet about the same story, taking over the original's scores. */

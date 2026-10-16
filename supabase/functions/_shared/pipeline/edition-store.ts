@@ -1,5 +1,8 @@
-import type { AiProvider, PinRule, PromptRef, SelectedItem, SlotConfig, UsageStore } from '../shared.ts';
-import type { ArticlePatch, ArticleRow, ArticleStatus } from '../types.ts';
+import type { AiProvider } from '../ai/providers.ts';
+import type { UsageStore } from '../ai/router.ts';
+import type { PromptRef } from '../prompts.ts';
+import type { PinRule, SelectedItem, SlotConfig } from '../selection.ts';
+import type { ArticlePatch, ArticleRow, ArticleStatus } from './types.ts';
 
 export interface EditionConfig {
   readonly topic: {
@@ -10,6 +13,12 @@ export interface EditionConfig {
     readonly pin: PinRule | null;
     /** Target English summary length (topics.settings.summary_words). */
     readonly summaryWords: number;
+    /** Items added per "Xem thêm" press / per "Cập nhật tin mới" run. */
+    readonly moreBatchSize: number;
+    readonly refreshSize: number;
+    /** Daily caps of the admin buttons. */
+    readonly dailyCapMore: number;
+    readonly dailyCapRefresh: number;
   };
   readonly edition: {
     readonly id: string;
@@ -29,6 +38,23 @@ export interface ArticleQuery {
   readonly fetchedSince?: Date;
 }
 
+export interface DigestInfo {
+  readonly id: string;
+  readonly topicId: string;
+  readonly editionId: string;
+  readonly digestDate: string;
+  readonly windowStart: Date;
+  readonly windowEnd: Date;
+}
+
+export interface DigestItemInfo {
+  readonly articleId: string;
+  readonly position: number;
+  readonly storyKey: string | null;
+}
+
+export type AddedBy = 'auto' | 'more' | 'refresh';
+
 export interface NewDigest {
   readonly topicId: string;
   readonly editionId: string;
@@ -45,7 +71,10 @@ export interface EditionStore extends UsageStore {
   lastDigestWindowEnd(topicId: string): Promise<Date | null>;
   findDigestId(topicId: string, editionId: string, digestDate: string): Promise<string | null>;
   createDigest(digest: NewDigest): Promise<string>;
-  addDigestItems(digestId: string, items: readonly SelectedItem[]): Promise<void>;
+  addDigestItems(digestId: string, items: readonly SelectedItem[], addedBy?: AddedBy): Promise<void>;
+  loadDigest(digestId: string): Promise<DigestInfo | null>;
+  loadDigestItems(digestId: string): Promise<DigestItemInfo[]>;
+  updateDigestWindowEnd(digestId: string, windowEnd: Date): Promise<void>;
   loadArticles(topicId: string, query: ArticleQuery): Promise<ArticleRow[]>;
   updateArticle(id: string, patch: ArticlePatch): Promise<void>;
   /** Editions whose local time has come and that have not run today (scheduler backup). */

@@ -1,7 +1,7 @@
 -- RLS / grants contract (docs/DESIGN.md §10.1). Run with: supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(19);
+select plan(22);
 
 -- ===== Public visitor =====
 set local role anon;
@@ -25,6 +25,9 @@ select throws_ok(
 );
 
 select throws_ok($$ select * from public.due_editions() $$, '42501', null, 'anon cannot call the scheduler');
+select throws_ok(
+  $$ select public.use_action_quota('macro_finance', 'more', 5) $$, '42501', null, 'anon cannot use button quota'
+);
 
 -- ===== Scheduler: editions due at their local time, once per day =====
 reset role;
@@ -43,6 +46,17 @@ select is_empty(
   $$ select 1 from public.due_editions('2026-10-16 23:30:00+00') $$,
   'an edition that already ran today is not due again'
 );
+set local role anon;
+
+-- ===== Button quota: stops at the daily cap =====
+reset role;
+select results_eq(
+  $$ select public.use_action_quota('macro_finance', 'refresh', 2) union all
+     select public.use_action_quota('macro_finance', 'refresh', 2) $$,
+  $$ values (true), (true) $$,
+  'the first presses up to the cap are allowed'
+);
+select is(public.use_action_quota('macro_finance', 'refresh', 2), false, 'a press beyond the daily cap is refused');
 set local role anon;
 
 -- ===== Disabled topic disappears for the public =====

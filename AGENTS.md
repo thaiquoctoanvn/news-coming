@@ -32,7 +32,7 @@
 
 ## Project Snapshot
 
-- **Status:** Phase 5 — worker pipeline + scheduling done; public web (`apps/web`: digest, calendar, charts) built, deployed to Netlify by `deploy.yml`; admin (login, config, buttons) not yet. The source of truth is `@docs/DESIGN.md`.
+- **Status:** Phase 6 — all planned features exist: scheduled editions (worker), public web, admin login (OTP), config and operations pages, "Xem thêm" / "Cập nhật tin mới" (Edge Functions `admin-login`, `more-news`, `trigger-refresh`). Pipeline core shared by worker and Edge Functions lives in `supabase/functions/_shared/pipeline/`. The source of truth is `@docs/DESIGN.md`.
 - **Stack (planned):** TypeScript everywhere; pnpm monorepo; web = Vite + React SPA + HeroUI v3 + Tailwind v4 + TanStack Query + react-hook-form + zod; worker = Node 24 running `.ts` directly (type stripping, `erasableSyntaxOnly`) on GitHub Actions; Supabase (Postgres, RLS, Auth email OTP via Resend, Edge Functions on Deno, pg_cron, Realtime); Netlify static hosting.
 - **Architecture:** topic is the top-level unit (categories, entities, sources, slots, editions, data modules all belong to a topic). Layout: `apps/web`, `apps/worker`, `supabase/{migrations,seed,functions}`, shared core in `supabase/functions/_shared/` (fetch-only TS used by both worker and Edge Functions).
 - **Data layer:** web talks to Supabase directly with the anon key + RLS (no custom API layer); worker uses the service_role key; AI providers (Groq for scoring/summary, Gemini for translation, with fallbacks) are configured in DB tables.
