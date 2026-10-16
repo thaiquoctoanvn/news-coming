@@ -385,6 +385,23 @@ Netlify: build `apps/web`, `_redirects` cho SPA (`/* /index.html 200`).
 
 ---
 
+
+### 11.1 Đã làm (Phase 5 — public)
+
+Code: `apps/web` (Vite 8 + React 19 + HeroUI v3 + Tailwind v4 + TanStack Query + react-router 8 + Recharts). Chỉ đọc qua anon key, cột theo grant (`original_url` được mở thêm ở `20261016000300_public_web.sql`).
+
+| Route | Nội dung |
+|---|---|
+| `/t/:topicId` | Bản tin: dải số liệu (dầu, lợi suất Mỹ/Nhật, thay đổi so phiên trước), chọn ngày (‹ ›) và edition (tabs), sự kiện quan trọng sắp tới, tin theo nhóm (Tin nóng → slot theo thứ tự). Card: danh mục, mức tác động, chiều tác động, tiêu đề, nguồn/giờ/phút đọc, đoạn đầu + "Đọc tiếp", "Đọc bài gốc". URL giữ trạng thái `?date=&edition=` |
+| `/t/:topicId/lich` | Lịch sự kiện theo ngày giờ VN, lọc "Rất quan trọng"/"Tất cả", ghi nguồn (FRED…) |
+| `/t/:topicId/bieu-do` | Biểu đồ lợi suất Mỹ, Nhật, giá dầu (1/3/12 tháng), tải lười để không làm nặng trang chính |
+
+- Font tự host (Be Vietnam Pro + Noto Serif, có tiếng Việt) → CSP không cần domain ngoài. `public/_headers`: CSP (`connect-src https://*.supabase.co`; `style-src 'unsafe-inline'` vì HeroUI/Recharts dùng inline style), HSTS, `X-Frame-Options: DENY`… `public/_redirects` cho SPA.
+- Nền sáng/tối theo hệ thống, nút chuyển lưu ở `localStorage` (chỉ là tiện ích, lỗi storage không ảnh hưởng).
+- Nội dung luôn render dạng text (không `dangerouslySetInnerHTML`), link chỉ nhận http(s).
+- Bundle: JS chính ~241KB gzip, trang biểu đồ tách riêng ~105KB gzip.
+- Deploy: bước 3 của `deploy.yml` (build với GitHub Variables `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` → `netlify deploy --prod`).
+
 ## 12. Cấu trúc repo
 
 ```
