@@ -76,7 +76,7 @@ function fakeServices(options: { translateStatus?: number; unreadable?: readonly
     if (options.translateStatus) return new Response('quota', { status: options.translateStatus });
     const user = (body.contents as { parts: { text: string }[] }[])[0]!.parts[0]!.text;
     const input = JSON.parse(user) as { id: string; title: string }[];
-    const text = JSON.stringify({ items: input.map((i) => ({ id: i.id, title_vi: `VI ${i.title}`, summary_vi: 'Tóm tắt' })) });
+    const text = JSON.stringify({ items: input.map((i) => ({ id: i.id, title_vi: `Bản dịch: ${i.title.toUpperCase()}`, summary_vi: 'Tóm tắt' })) });
     return Response.json({ candidates: [{ content: { parts: [{ text }] } }], usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 5 } });
   };
   return { calls, fetchImpl };

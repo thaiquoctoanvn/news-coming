@@ -1,0 +1,27 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+/* Editorial direction: serif headlines over a clean sans body, semantic colors for market direction. */
+@theme {
+  --font-sans: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Noto Serif", Georgia, "Times New Roman", serif;
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+/* Summaries keep the paragraph breaks produced upstream. */
+.summary-text p + p {
+  margin-top: 0.75rem;
+}

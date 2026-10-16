@@ -1,6 +1,8 @@
 // Cheap, deterministic faithfulness checks (.agents/rules/content-integrity.md): numbers are the
-// facts most often invented or altered by a model, and they survive translation as digit runs
-// ("$21.5M" → "21,5 triệu $" keeps "21" and "5"; "848,250" → "848.250" keeps "848" and "250").
+// facts most often invented or altered by a model. Each number is compared as a whole, with its
+// thousands/decimal separators removed, so it survives reformatting in translation
+// ("$21.5M" → "21,5 triệu $" are both "215"; "848,250" → "848.250" are both "848250")
+// while a garbled value is caught ("$4,105.63" is "410563", a wrong "$4,1051.63" is "4105163").
 
 // Words the source may spell out but the output legitimately writes with digits
 // ("September" → "tháng 9", "third quarter" → "quý 3", "two" → "2").
@@ -12,12 +14,13 @@ const WORD_NUMBERS: Readonly<Record<string, number>> = {
   jan: 1, feb: 2, mar: 3, apr: 4, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12,
 };
 
-function digitRuns(text: string): string[] {
-  return (text.match(/\d+/g) ?? []).map((run) => run.replace(/^0+(?=\d)/, ''));
+/** Numbers as digit strings: "4,105.63" → "410563", "0.6" → "06" → "6"; dates like "14/9" give "14", "9". */
+function numbers(text: string): string[] {
+  return (text.match(/\d+(?:[.,]\d+)*/g) ?? []).map((n) => n.replace(/[.,]/g, '').replace(/^0+(?=\d)/, ''));
 }
 
 function knownNumbers(source: string): Set<string> {
-  const known = new Set(digitRuns(source));
+  const known = new Set(numbers(source));
   for (const word of source.toLowerCase().match(/[a-z]+/g) ?? []) {
     const value = WORD_NUMBERS[word];
     if (value !== undefined) known.add(String(value));
@@ -28,5 +31,5 @@ function knownNumbers(source: string): Set<string> {
 /** Numbers in `output` that never occur in `source` (empty when every number is supported). */
 export function unsupportedNumbers(output: string, source: string): string[] {
   const known = knownNumbers(source);
-  return [...new Set(digitRuns(output))].filter((run) => !known.has(run));
+  return [...new Set(numbers(output))].filter((n) => !known.has(n));
 }

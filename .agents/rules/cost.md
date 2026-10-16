@@ -19,7 +19,7 @@ This project must run at **zero cost**. These rules are non-negotiable and overr
 | GitHub (public repo) | code, Actions, Secrets | Actions are free only while the repo is **public** — making it private changes the cost model |
 | Groq, Gemini, Cerebras, Cloudflare Workers AI (free tiers) | AI scoring / summary / translation | Gemini free tier only applies to keys from a project **without billing**; respect daily/RPM limits |
 | Resend Free | OTP email | 100 emails/day, 3,000/month |
-| Jina Reader (`r.jina.ai`, no key) | reading article text for summaries | ~20 requests/minute; the worker spaces calls ≥ 3.1 s apart. Approved by the user on 2026-10-15 |
+| Jina Reader (`r.jina.ai`, no key) | fallback reader when a page cannot be fetched directly | ~20 requests/minute; the worker spaces calls ≥ 3.1 s apart; may block a domain for anonymous users for hours. Approved by the user on 2026-10-15. Do **not** use a Jina API key: its free tokens are one-time |
 | FRED, EIA, SEC EDGAR, Treasury FiscalData, Google News RSS, GDELT, public RSS | data sources | Respect rate limits and required headers (SEC `User-Agent`) |
 
 Anything not in this table needs user approval before use (rule 1).

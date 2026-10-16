@@ -102,6 +102,7 @@ export function summaryPrompt(items: readonly SummaryInput[], targetWords: numbe
     'Do not add outside knowledge, background, assumptions, speculation, or your own analysis. Do not invent numbers, quotes, names, dates or causes.',
     'Copy numbers, percentages, prices, dates and quotes exactly as written in the text.',
     'Mention market impact, outlook or what to watch ONLY if the text itself says so, and attribute it (e.g. "analysts at X expect...").',
+    'Ignore page furniture that is not part of the news story: price tickers and widgets, "related articles", ads, author bios, disclaimers, sign-up prompts.',
     `Length: about ${targetWords} words in 3-5 short paragraphs separated by a blank line. If the text is short, write a proportionally shorter summary — never pad.`,
     ...(feedback ? [`Your previous summary broke the rule: ${feedback}. Rewrite it using only the text.`] : []),
     'Answer with JSON only: {"items":[{"id":"1","summary":"..."}]}',
@@ -131,7 +132,8 @@ export function translationPrompt(items: readonly TranslationInput[]): ChatReque
     'Preferred terms: Federal Reserve/Fed → FED; Treasury yields → lợi suất trái phiếu Kho bạc Mỹ; JGB → trái phiếu chính phủ Nhật (JGB);',
     'basis points → điểm cơ bản; rate cut/hike → cắt giảm/tăng lãi suất; stablecoin, ETF, token hóa (tokenization) giữ nguyên.',
     'Keep the paragraph breaks of the summary. Every word must be proper Vietnamese or an unchanged proper name/ticker:',
-    'never leave English words untranslated and never glue an English word to a Vietnamese one.',
+    'never leave English words untranslated (e.g. "oil" → "dầu", "price" → "giá") and never glue an English word to a Vietnamese one.',
+    'Titles use Vietnamese sentence case: capitalize only the first word and proper names (e.g. "Giá dầu tăng khi căng thẳng ở eo biển Hormuz leo thang").',
     'STRICT RULE: translate faithfully — add nothing, drop nothing, change no number, date or name. Write numbers with digits exactly as in the English.',
     'Answer with JSON only: {"items":[{"id":"1","title_vi":"...","summary_vi":"..."}]}',
   ].join('\n');
@@ -140,12 +142,21 @@ export function translationPrompt(items: readonly TranslationInput[]): ChatReque
   return { system, user, maxOutputTokens: Math.ceil(words * 2.5) + 500 };
 }
 
+// Vietnamese words written without diacritics that also exist in English; never flagged.
+const VIETNAMESE_ASCII_WORDS = new Set(['tin', 'con', 'ban', 'van', 'sang', 'long', 'hang', 'nam', 'tan', 'lan', 'than', 'thu', 'ten']);
+
 /**
- * Latin-only words of 7+ letters in a Vietnamese translation that do not occur in the English source
- * usually mean a garbled output ("trongani", "canengagement"). Returns those words.
+ * Words that mean a translation slipped:
+ * - Latin-only words of 7+ letters not in the English source: garbled output ("trongani", "canengagement");
+ * - lowercase English words of 3+ letters copied from the source: left untranslated ("giá oil").
+ *   Names and tickers are capitalized, so they are not affected.
  */
 export function suspiciousTranslationWords(vietnamese: string, english: string): string[] {
   const source = new Set(english.toLowerCase().match(/[a-z]+/g) ?? []);
-  const words = vietnamese.match(/(?<![\p{L}])[A-Za-z]{7,}(?![\p{L}])/gu) ?? [];
-  return words.filter((w) => !source.has(w.toLowerCase()));
+  const words = vietnamese.match(/(?<![\p{L}])[A-Za-z]{3,}(?![\p{L}])/gu) ?? [];
+  return words.filter((w) => {
+    const lower = w.toLowerCase();
+    if (w.length >= 7 && !source.has(lower)) return true;
+    return w === lower && source.has(lower) && !VIETNAMESE_ASCII_WORDS.has(lower);
+  });
 }

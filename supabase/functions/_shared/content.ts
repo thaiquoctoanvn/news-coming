@@ -1,8 +1,12 @@
+import { Readability } from '@mozilla/readability';
+import { parseHTML } from 'linkedom';
 import type { FetchLike } from './ai/providers.ts';
 
-// Reads article text through Jina Reader (r.jina.ai, free tier without key: ~20 requests/minute).
-// Google News links are JavaScript redirects that Jina refuses (403), so they are first decoded to
-// the publisher URL through Google's own (unofficial) decoding endpoint.
+// Reads article text in two free ways: the publisher page fetched directly and parsed with
+// Readability, then Jina Reader (r.jina.ai, anonymous: ~20 requests/minute, and Jina may block a
+// domain for anonymous users for a while) for pages that need JavaScript or refuse direct access.
+// Google News links are JavaScript redirects, so they are first decoded to the publisher URL
+// through Google's own (unofficial) decoding endpoint.
 // The text always belongs to the article itself — callers never borrow another article's text.
 
 const BROWSER_USER_AGENT =
@@ -20,7 +24,10 @@ export const MAX_ARTICLE_CHARS = 8_000;
 const BOILERPLATE = /official websites use|secure \.gov websites|all rights reserved|cookie|subscribe|sign up|newsletter|disclosure & polic|terms of (use|service)|privacy policy|enable javascript|could've sworn the page/i;
 
 /** Publishers that block automated readers; skipping them saves a slow failed request. */
-const PAYWALLED_DOMAINS = ['reuters.com', 'wsj.com', 'bloomberg.com', 'ft.com', 'barrons.com', 'nytimes.com', 'economist.com', 'nikkei.com'];
+const PAYWALLED_DOMAINS = [
+  'reuters.com', 'wsj.com', 'bloomberg.com', 'ft.com', 'barrons.com', 'nytimes.com', 'economist.com', 'nikkei.com', 'marketwatch.com',
+];
+const DIRECT_TIMEOUT_MS = 15_000;
 
 export function isGoogleNewsUrl(url: string): boolean {
   try {
@@ -97,17 +104,35 @@ export function articleTextFromJina(markdown: string): string | null {
   const title = markdown.match(/^Title:(.*)$/m)?.[1]?.trim();
   if (!title) return null;
   const body = markdown.split(/^Markdown Content:\s*$/m)[1] ?? '';
-  const paragraphs = body
-    .split(/\n\s*\n/)
-    .map((block) => block
-      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-      .replace(/^[#>*\-\s|]+/gm, '')
-      .replace(/[*_`]+/g, '')
-      .replace(/\s+/g, ' ')
-      .trim())
+  const blocks = body.split(/\n\s*\n/).map((block) => block
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^[#>*\-\s|]+/gm, '')
+    .replace(/[*_`]+/g, ''));
+  return joinProse(blocks);
+}
+
+/** Article body from the publisher page itself (Readability), or null when blocked or too short. */
+export async function readDirect(url: string, fetchImpl: FetchLike = fetch): Promise<string | null> {
+  if (isPaywalled(url)) return null;
+  const html = await getText(url, { 'User-Agent': BROWSER_USER_AGENT, Accept: 'text/html,application/xhtml+xml' }, DIRECT_TIMEOUT_MS, fetchImpl);
+  return html ? articleTextFromHtml(html) : null;
+}
+
+export function articleTextFromHtml(html: string): string | null {
+  const article = new Readability(parseHTML(html).document as never).parse();
+  if (!article?.content) return null;
+  const { document } = parseHTML(`<html><body>${article.content}</body></html>`);
+  const blocks = [...document.querySelectorAll('p, li, blockquote')].map((node) => node.textContent ?? '');
+  return joinProse(blocks);
+}
+
+/** Keeps real sentences: drops short lines, tables, page chrome (tickers, banners, legal notes). */
+function joinProse(blocks: readonly string[]): string | null {
+  const paragraphs = blocks
+    .map((block) => block.replace(/\s+/g, ' ').trim())
     .filter((p) => p.length >= MIN_PARAGRAPH_CHARS && !p.includes(' | ') && /[.!?]["”’)]?$/.test(p) && !BOILERPLATE.test(p));
-  const text = paragraphs.join('\n\n');
+  const text = [...new Set(paragraphs)].join('\n\n');
   return text.length >= MIN_ARTICLE_CHARS ? text.slice(0, MAX_ARTICLE_CHARS) : null;
 }
 
