@@ -73,6 +73,10 @@ export class MemoryEditionStore implements EditionStore {
     this.patches.set(id, { ...this.patches.get(id), ...patch });
   }
 
+  async loadDueEditions(): Promise<{ topicId: string; editionId: string }[]> {
+    return [];
+  }
+
   async loadClusterMembers(topicId: string, clusterKey: string, excludeId: string): Promise<ArticleRow[]> {
     return this.rows().filter((a) => a.topicId === topicId && a.clusterKey === clusterKey && a.id !== excludeId);
   }

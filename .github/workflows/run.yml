@@ -1,38 +1,47 @@
 name: Run worker
 
-# Runs the worker from the `prod` tag, i.e. code whose DB migrations are already deployed
-# (DESIGN.md §13). Manual trigger for now; scheduling arrives in Phase 4.
+# Runs the worker from the `prod` tag, i.e. code whose DB migrations are already deployed (DESIGN.md §13).
+# Triggers:
+# - workflow_dispatch from Supabase pg_cron when an edition is due (trigger=schedule), or by hand;
+# - schedule below as a backup: `catch-up` runs editions that are due but did not run today.
 
 on:
   workflow_dispatch:
     inputs:
       command:
-        description: edition = full digest (collect + AI); collect = fetch only; verify-ai = check AI keys and models
+        description: edition = full digest; collect = news only; modules = prices/yields/calendar; catch-up = run due editions; verify-ai = check AI keys
         type: choice
-        options: [edition, collect, verify-ai]
+        options: [edition, collect, modules, catch-up, verify-ai]
         default: edition
       topic:
         description: Topic id, or "all" for every enabled topic
         default: all
         required: true
       edition:
-        description: Edition id (required for "edition")
-        type: choice
-        options: [morning, pre_us]
+        description: Edition id (for "edition"), e.g. morning or pre_us
         default: morning
+        required: false
+      trigger:
+        description: Recorded in crawl_runs (schedule = sent by pg_cron)
+        type: choice
+        options: [manual, schedule, backup]
+        default: manual
+  schedule:
+    - cron: '30 0 * * *'     # 07:30 Vietnam — after the 06:00 morning edition
+    - cron: '15 14 * * 1-5'  # 09:15–10:15 New York — after the 08:45 pre_us edition
 
 permissions:
   contents: read
 
 concurrency:
-  group: run-${{ inputs.topic }}
+  group: run-${{ inputs.topic || 'all' }}
   cancel-in-progress: false
 
 jobs:
   run:
     runs-on: ubuntu-latest
-    # AI calls wait for free-tier per-minute windows, so an edition can take several minutes.
-    timeout-minutes: 30
+    # AI calls wait for free-tier per-minute windows, so an edition can take 15 minutes or more.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
         with:
@@ -49,7 +58,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Run ${{ inputs.command }}
+      - name: Run ${{ inputs.command || 'catch-up' }}
         working-directory: apps/worker
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -57,12 +66,18 @@ jobs:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          COMMAND: ${{ inputs.command }}
-          TOPIC: ${{ inputs.topic }}
-          EDITION: ${{ inputs.edition }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+          COMMAND: ${{ inputs.command || 'catch-up' }}
+          TOPIC: ${{ inputs.topic || 'all' }}
+          EDITION: ${{ inputs.edition || 'morning' }}
+          TRIGGER: ${{ inputs.trigger || 'backup' }}
         run: |
           case "$COMMAND" in
-            edition) node src/index.ts edition --topic "$TOPIC" --edition "$EDITION" --trigger manual ;;
-            collect) node src/index.ts collect --topic "$TOPIC" --trigger manual ;;
+            edition)   node src/index.ts edition --topic "$TOPIC" --edition "$EDITION" --trigger "$TRIGGER" ;;
+            collect)   node src/index.ts collect --topic "$TOPIC" --trigger "$TRIGGER" ;;
+            modules)   node src/index.ts modules --topic "$TOPIC" ;;
+            catch-up)  node src/index.ts catch-up ;;
             verify-ai) node src/index.ts verify-ai ;;
+            *) echo "::error::Unknown command $COMMAND"; exit 1 ;;
           esac

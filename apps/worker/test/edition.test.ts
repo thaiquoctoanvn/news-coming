@@ -28,7 +28,7 @@ const editionConfig: EditionConfig = {
     id: 'macro_finance', name: 'Macro', scoringGuide: 'guide', aiDailyRequestCap: 60,
     pin: { minImpact: 9, direction: 'negative', max: 3 }, summaryWords: 350,
   },
-  edition: { id: 'morning', timezone: 'Asia/Ho_Chi_Minh', sizeMax: 3 },
+  edition: { id: 'morning', timezone: 'Asia/Ho_Chi_Minh', sizeMax: 3, runModules: false },
   slots: [
     { id: 'oil', position: 1, kind: 'category', categoryIds: ['oil'], entityIds: [], maxItems: 1, minScore: 40, extraItemMinScore: null, attachModules: [] },
     { id: 'rest', position: 6, kind: 'fill', categoryIds: [], entityIds: [], maxItems: 12, minScore: 40, extraItemMinScore: null, attachModules: [] },
