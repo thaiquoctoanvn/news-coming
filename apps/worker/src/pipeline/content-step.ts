@@ -1,8 +1,11 @@
-import { JINA_MIN_INTERVAL_MS, type FetchLike, decodeGoogleNewsUrl, isGoogleNewsUrl, isPaywalled, readWithJina } from '../shared.ts';
+import {
+  JINA_MIN_INTERVAL_MS, type FetchLike, decodeGoogleNewsUrl, isGoogleNewsUrl, isPaywalled, readDirect, readWithJina,
+} from '../shared.ts';
 import type { ArticleRow } from '../types.ts';
 
-// Reads each article's own text (DESIGN.md §8.1). An article is never paired with another
-// article's text: when it cannot be read, the caller replaces the whole article or drops it.
+// Reads each article's own text (DESIGN.md §8.1): the publisher page directly first, then Jina Reader.
+// An article is never paired with another article's text: when it cannot be read, the caller
+// replaces the whole article or drops it.
 
 export interface ArticleContent {
   /** Article body, or null when it could not be read. */
@@ -38,6 +41,8 @@ export class ArticleReader {
     const originalUrl = isGoogleNewsUrl(article.url) ? await this.decode(article.url) : article.url;
     if (!originalUrl) return this.remember(article.id, { text: null, originalUrl: null });
     if (isPaywalled(originalUrl)) return this.remember(article.id, { text: null, originalUrl });
+    const direct = await readDirect(originalUrl, this.fetchImpl);
+    if (direct) return this.remember(article.id, { text: direct, originalUrl });
     await this.waitTurn();
     const text = await readWithJina(originalUrl, this.fetchImpl);
     return this.remember(article.id, { text, originalUrl });

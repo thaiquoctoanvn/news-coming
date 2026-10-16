@@ -118,7 +118,8 @@ describe('authorityForDomain', () => {
     ['federalreserve.gov', 10],
     ['home.treasury.gov', 10],
     ['reuters.com', 5],
-    ['finance.yahoo.com', 0],
+    ['finance.yahoo.com', 3],
+    ['example-blog.net', 0],
     [undefined, 0],
   ])('%s → %i', (domain, expected) => {
     expect(authorityForDomain(domain)).toBe(expected);

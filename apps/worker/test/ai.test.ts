@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { describe, expect, test } from 'vitest';
 import {
   type AiProvider, AiRouter, AiUnavailableError, type UsageStore, type UsageTotals, articleTextFromJina, isGoogleNewsUrl, isPaywalled,
-  normalizeStoryKey, parseBatchExecuteUrl, scoringSchema, suspiciousTranslationWords, unsupportedNumbers,
+  articleTextFromHtml, normalizeStoryKey, parseBatchExecuteUrl, scoringSchema, suspiciousTranslationWords, unsupportedNumbers,
 } from '../src/shared.ts';
 import { parseModelJson } from '../../../supabase/functions/_shared/ai/json.ts';
 
@@ -181,10 +181,33 @@ describe('faithfulness checks', () => {
   });
 
   test('reports numbers the output invented', () => {
-    expect(unsupportedNumbers('Gold rose 1.1% to $4,151 on Thursday', 'Gold rose 1.1% on Thursday')).toEqual(['4', '151']);
+    expect(unsupportedNumbers('Gold rose 1.1% to $4,151 on Thursday', 'Gold rose 1.1% on Thursday')).toEqual(['4151']);
+    expect(unsupportedNumbers('vàng mở cửa ở $4,1051.63', 'gold opened at $4,105.63')).toEqual(['4105163']);
   });
 
   test('allows digits for spelled-out numbers, ordinals and months', () => {
     expect(unsupportedNumbers('Lợi nhuận quý 3 tăng gấp 2 lần trong tháng 10', 'Third-quarter profit doubled to two times in October')).toEqual([]);
+  });
+});
+
+describe('untranslated words and direct article reading', () => {
+  test('flags lowercase English words copied into the translation, not names or tickers', () => {
+    const english = 'Oil prices will depend on whether shipping recovers, said Chevron CEO';
+
+    expect(suspiciousTranslationWords('hướng đi của giá oil phụ thuộc vào vận tải', english)).toEqual(['oil']);
+    expect(suspiciousTranslationWords('CEO của Chevron cho biết giá dầu phụ thuộc vào vận tải', english)).toEqual([]);
+  });
+
+  test('extracts paragraphs from a publisher page and drops page chrome', () => {
+    const sentence = 'Oil fell on Thursday as traders assessed supply disruptions after attacks on ships near Hormuz.';
+    const html = `<html><head><title>Oil</title></head><body><nav><a href="/">Markets</a></nav><article><h1>Oil falls</h1>
+      <p>${sentence} ${sentence}</p><p>Analysts said volatility would persist while the strait stays dangerous for tankers. ${sentence}</p>
+      <p>Sign up for our newsletter to get the latest market news every morning in your inbox.</p>
+      <p>${sentence} ${sentence} Prices later recovered some losses during the afternoon session in New York.</p></article></body></html>`;
+
+    const text = articleTextFromHtml(html);
+
+    expect(text?.split('\n\n')).toHaveLength(3);
+    expect(text).not.toContain('newsletter');
   });
 });
