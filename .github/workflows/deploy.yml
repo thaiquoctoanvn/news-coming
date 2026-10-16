@@ -129,7 +129,7 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm --filter @news-coming/web build
-          pnpm dlx netlify-cli deploy --prod --dir apps/web/dist --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN"
+          pnpm --package=netlify-cli@27.12.1 dlx netlify deploy --prod --dir apps/web/dist --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN"
           git tag -f deployed/web "$DEPLOY_SHA" && git push -f origin refs/tags/deployed/web
 
       - name: 4. Move prod tag (worker runs from it)
