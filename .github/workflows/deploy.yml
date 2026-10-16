@@ -63,7 +63,7 @@ jobs:
           }
           echo "db=$(changed deployed/db '^supabase/migrations/')" >> "$GITHUB_OUTPUT"
           echo "functions=$(changed deployed/functions '^supabase/functions/')" >> "$GITHUB_OUTPUT"
-          echo "web=$(changed deployed/web '^(apps/web/|supabase/functions/_shared/|pnpm-lock.yaml)')" >> "$GITHUB_OUTPUT"
+          echo "web=$(changed deployed/web '^(apps/web/|pnpm-lock.yaml)')" >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
       - name: Check Supabase configuration
@@ -129,7 +129,11 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm --filter @news-coming/web build
-          pnpm --package=netlify-cli@27.12.1 dlx netlify deploy --prod --dir apps/web/dist --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN"
+          # --filter: the repo is a monorepo; --no-build: the CLI would otherwise build again (already built above);
+          # absolute --dir: with --filter the CLI may resolve relative paths from the package folder.
+          pnpm --package=netlify-cli@27.12.1 dlx netlify deploy --prod --no-build --filter @news-coming/web \
+            --dir "$GITHUB_WORKSPACE/apps/web/dist" --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN" \
+            --message "deploy ${DEPLOY_SHA::7}"
           git tag -f deployed/web "$DEPLOY_SHA" && git push -f origin refs/tags/deployed/web
 
       - name: 4. Move prod tag (worker runs from it)
