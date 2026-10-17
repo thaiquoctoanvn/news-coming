@@ -1,164 +1,191 @@
-import { Button, Input } from '@heroui/react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type FormEvent, useState } from 'react';
+import { Button } from '@heroui/react';
+import { useState } from 'react';
+import { ChipListEditor } from '../../components/ChipListEditor.tsx';
+import { FIELD_INPUT, Field, FormDialog } from '../../components/FormDialog.tsx';
+import { PlusIcon, TrashIcon } from '../../components/icons.tsx';
+import { type Option, OptionSelect } from '../../components/OptionSelect.tsx';
 import { ErrorState, LoadingCards } from '../../components/States.tsx';
 import { Toggle } from '../../components/Toggle.tsx';
-import { type Row, deleteRow, fetchRows, insertRow, updateRow } from '../../lib/admin-api.ts';
-import { useSupabase } from '../../lib/supabase.ts';
+import type { Row } from '../../lib/admin-api.ts';
+import type { Category } from './config/CategoriesSection.tsx';
+import { EditButton } from './config/RowActions.tsx';
+import { Section } from './config/Section.tsx';
+import { useAdminRows } from './config/use-admin-rows.ts';
 import { type Column, type TableDef, fromInputText, patchFor, readValue, toInputText } from './config-tables.ts';
 
-// One config table: switches save immediately, text cells save when the field loses focus.
+// A config table shown read-only: switches toggle in place, everything else is edited in a popup.
 
 type Props = {
   def: TableDef;
   topicId: string;
 };
 
+type Editing = { mode: 'add' } | { mode: 'edit'; row: Row } | null;
+
+const isEditable = (c: Column) => c.type !== 'switch' && c.type !== 'readonly';
+// Dropdown key for "no category" (an empty string is not a usable collection key).
+const NONE = '__none__';
+
 export function EditableTable({ def, topicId }: Props) {
-  const db = useSupabase();
-  const queryClient = useQueryClient();
-  const queryKey = ['admin-table', def.table, def.topicScoped ? topicId : 'all'];
-  const rows = useQuery({
-    queryKey,
-    queryFn: () => fetchRows(db, { table: def.table, order: def.order, ...(def.topicScoped ? { topicId } : {}) }),
-  });
-  const [error, setError] = useState<string | null>(null);
-
+  const table = useAdminRows<Row>(def.table, def.topicScoped ? topicId : null, def.order);
+  const categories = useAdminRows<Category>('categories', topicId, 'position');
+  const [editing, setEditing] = useState<Editing>(null);
+  const categoryOptions: Option[] = (categories.rows.data ?? []).map((c) => ({ id: c.id, label: c.name_vi }));
+  const categoryName = new Map(categoryOptions.map((o) => [o.id, o.label]));
   const match = (row: Row): Row => Object.fromEntries(def.keys.map((k) => [k, row[k]]));
-  const save = useMutation({
-    mutationFn: ({ row, key, value }: { row: Row; key: string; value: unknown }) => updateRow(db, def.table, match(row), patchFor(row, key, value)),
-    onSuccess: () => {
-      setError(null);
-      void queryClient.invalidateQueries({ queryKey });
-    },
-    onError: (e: Error) => setError(e.message),
-  });
-  const remove = useMutation({
-    mutationFn: (row: Row) => deleteRow(db, def.table, match(row)),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey }),
-    onError: (e: Error) => setError(e.message),
-  });
+  const hasActions = def.columns.some(isEditable) || def.allowDelete;
 
-  if (rows.isPending) return <LoadingCards count={1} />;
-  if (rows.isError) return <ErrorState title={`Không tải được ${def.title.toLowerCase()}`} error={rows.error} />;
+  const display = (c: Column, row: Row): string => {
+    const value = readValue(row, c.key);
+    if (c.type === 'category') return typeof value === 'string' ? categoryName.get(value) ?? value : '';
+    return toInputText(value, c.type === 'list' ? 'list' : 'text');
+  };
+
+  const handleSave = (values: Row) => {
+    if (editing?.mode === 'edit') {
+      const patch = Object.entries(values).reduce<Row>((acc, [key, value]) => ({ ...acc, ...patchFor({ ...editing.row, ...acc }, key, value) }), {});
+      table.update.mutate({ match: match(editing.row), patch });
+    } else if (def.insert) {
+      const fields = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== null));
+      table.insert.mutate({ ...def.insert.defaults, ...fields, ...(def.topicScoped ? { topic_id: topicId } : {}) });
+    }
+    setEditing(null);
+  };
 
   return (
-    <section aria-labelledby={`table-${def.id}`} className="flex flex-col gap-3">
-      <div>
-        <h2 id={`table-${def.id}`} className="font-serif text-lg font-semibold">{def.title}</h2>
-        <p className="text-sm text-muted">{def.description}</p>
-      </div>
-      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-      <div className="overflow-x-auto rounded-xl border border-border">
-        <table className="w-full min-w-max text-sm">
-          <thead className="bg-surface text-left text-xs text-muted">
-            <tr>
-              {def.columns.map((c) => <th key={c.key} scope="col" className="px-3 py-2 font-medium">{c.label}</th>)}
-              {def.allowDelete && <th scope="col" className="px-3 py-2"><span className="sr-only">Xóa</span></th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {rows.data.map((row) => (
-              <tr key={def.keys.map((k) => String(row[k])).join('|')}>
-                {def.columns.map((c) => (
-                  <td key={c.key} className="px-3 py-1.5 align-middle">
-                    <Cell column={c} row={row} onSave={(value) => save.mutate({ row, key: c.key, value })} />
-                  </td>
-                ))}
-                {def.allowDelete && (
-                  <td className="px-3 py-1.5">
-                    <Button size="sm" variant="danger-soft" onPress={() => window.confirm(`Xóa "${String(row.name ?? row.id)}"?`) && remove.mutate(row)}>
-                      Xóa
-                    </Button>
-                  </td>
-                )}
+    <Section
+      id={def.id}
+      title={def.title}
+      description={def.description}
+      error={table.error}
+      action={def.insert && <Button size="sm" variant="secondary" onPress={() => setEditing({ mode: 'add' })}><PlusIcon className="size-3.5" />Thêm</Button>}
+    >
+      {table.rows.isPending && <LoadingCards count={1} />}
+      {table.rows.isError && <ErrorState title={`Không tải được ${def.title.toLowerCase()}`} error={table.rows.error} />}
+      {table.rows.isSuccess && (
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full min-w-max text-sm">
+            <thead className="bg-surface text-left text-xs text-muted">
+              <tr>
+                {def.columns.map((c) => <th key={c.key} scope="col" className="px-3 py-2 font-medium">{c.label}</th>)}
+                {hasActions && <th scope="col" className="px-3 py-2"><span className="sr-only">Thao tác</span></th>}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {def.insert && <InsertForm def={def} topicId={topicId} onDone={() => void queryClient.invalidateQueries({ queryKey })} />}
-    </section>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {table.rows.data.map((row) => {
+                const name = String(row.name ?? row.name_vi ?? row.model ?? row.id);
+                return (
+                  <tr key={def.keys.map((k) => String(row[k])).join('|')} className={row.enabled === false ? 'text-muted' : ''}>
+                    {def.columns.map((c) => (
+                      <td key={c.key} className="px-3 py-2 align-middle">
+                        {c.type === 'switch' ? (
+                          <Toggle label={`${c.label} ${name}`} isSelected={readValue(row, c.key) === true} onChange={(v) => table.update.mutate({ match: match(row), patch: patchFor(row, c.key, v) })} />
+                        ) : (
+                          <span className={`block max-w-xs truncate ${c.type === 'readonly' ? 'text-muted' : ''}`} title={display(c, row)}>{display(c, row) || '—'}</span>
+                        )}
+                      </td>
+                    ))}
+                    {hasActions && (
+                      <td className="whitespace-nowrap px-2 py-2 text-right">
+                        {def.columns.some(isEditable) && (
+<EditButton name={name} onPress={() => setEditing({ mode: 'edit', row })} />
+                        )}
+                        {def.allowDelete && (
+                          <Button isIconOnly size="sm" variant="ghost" aria-label={`Xóa ${name}`} onPress={() => window.confirm(`Xóa "${name}"?`) && table.remove.mutate(match(row))}>
+                            <TrashIcon className="size-4 text-danger" />
+                          </Button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {editing && (
+        <RowDialog
+          title={editing.mode === 'edit' ? `Sửa ${def.title.toLowerCase()}` : `Thêm ${def.title.toLowerCase()}`}
+          columns={editing.mode === 'edit' ? def.columns.filter(isEditable) : def.insert?.columns ?? []}
+          row={editing.mode === 'edit' ? editing.row : { ...def.insert?.defaults }}
+          categoryOptions={categoryOptions}
+          onSave={handleSave}
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </Section>
   );
 }
 
-function Cell({ column, row, onSave }: { column: Column; row: Row; onSave: (value: unknown) => void }) {
-  const value = readValue(row, column.key);
-  if (column.type === 'switch') return <Toggle label={column.label} isSelected={value === true} onChange={onSave} />;
-  if (column.type === 'readonly') {
-    return <span className="block max-w-xs truncate text-muted" title={toInputText(value, 'text')}>{toInputText(value, 'text') || '—'}</span>;
-  }
-  return <TextCell column={column} value={value} onSave={onSave} />;
-}
+type DialogProps = {
+  title: string;
+  columns: readonly Column[];
+  row: Row;
+  categoryOptions: readonly Option[];
+  onSave: (values: Row) => void;
+  onClose: () => void;
+};
 
-function TextCell({ column, value, onSave }: { column: Column; value: unknown; onSave: (value: unknown) => void }) {
-  const initial = toInputText(value, column.type);
-  const [text, setText] = useState(initial);
+/** Form for the editable columns of one row; values are converted and checked on OK. */
+function RowDialog({ title, columns, row, categoryOptions, onSave, onClose }: DialogProps) {
+  const [values, setValues] = useState<Record<string, unknown>>(() =>
+    Object.fromEntries(columns.map((c) => {
+      const value = readValue(row, c.key);
+      return [c.key, c.type === 'list' || c.type === 'category' || c.type === 'select' ? value ?? null : toInputText(value, c.type)];
+    })),
+  );
   const [error, setError] = useState<string | null>(null);
+  const set = (key: string, value: unknown) => setValues((v) => ({ ...v, [key]: value }));
 
-  const handleBlur = () => {
-    if (text === initial) return;
+  const handleSubmit = () => {
     try {
-      onSave(fromInputText(text, column.type));
-      setError(null);
+      const out = Object.fromEntries(columns.map((c) => {
+        const raw = values[c.key];
+        const value = c.type === 'list' ? raw ?? [] : c.type === 'category' || c.type === 'select' ? raw ?? null : fromInputText(String(raw ?? ''), c.type);
+        if (c.required && (value === null || value === '')) throw new Error(`Cần nhập ${c.label.toLowerCase()}`);
+        return [c.key, value];
+      }));
+      onSave(out);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Giá trị không hợp lệ');
     }
   };
 
-  const width = column.type === 'number' || column.type === 'time' ? 'w-24' : 'w-56';
   return (
-    <div>
-      <Input
-        aria-label={column.label}
-        title={column.hint}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onBlur={handleBlur}
-        className={width}
-        aria-invalid={error !== null}
-      />
-      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
-    </div>
-  );
-}
-
-function InsertForm({ def, topicId, onDone }: { def: TableDef; topicId: string; onDone: () => void }) {
-  const db = useSupabase();
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [error, setError] = useState<string | null>(null);
-  const add = useMutation({
-    mutationFn: (row: Row) => insertRow(db, def.table, row),
-    onSuccess: () => {
-      setValues({});
-      setError(null);
-      onDone();
-    },
-    onError: (e: Error) => setError(e.message),
-  });
-  if (!def.insert) return null;
-
-  const handleSubmit = (event: FormEvent) => {
-    event.preventDefault();
-    try {
-      const fields = Object.fromEntries(def.insert!.columns.map((c) => [c.key, fromInputText(values[c.key] ?? '', c.type)]));
-      const row: Row = { ...def.insert!.defaults, ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== null)) };
-      add.mutate(def.topicScoped ? { ...row, topic_id: topicId } : row);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Giá trị không hợp lệ');
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2 rounded-xl bg-surface p-3">
-      {def.insert.columns.map((c) => (
-        <label key={c.key} className="flex flex-col gap-1 text-xs text-muted">
-          {c.label}
-          <Input value={values[c.key] ?? ''} onChange={(e) => setValues((v) => ({ ...v, [c.key]: e.target.value }))} className="w-48" />
-        </label>
-      ))}
-      <Button type="submit" size="sm" variant="primary" isDisabled={add.isPending}>Thêm</Button>
-      {error && <p role="alert" className="w-full text-xs text-danger">{error}</p>}
-    </form>
+    <FormDialog title={title} onSubmit={handleSubmit} onClose={onClose} error={error}>
+      {columns.map((c, i) => {
+        const value = values[c.key];
+        if (c.type === 'category' || c.type === 'select') {
+          const options = c.type === 'category' ? [{ id: NONE, label: '— Không —' }, ...categoryOptions] : c.options ?? [];
+          return (
+            <div key={c.key} className="flex flex-col gap-1">
+              <span className="text-muted">{c.label}</span>
+              <OptionSelect label={c.label} options={options} value={typeof value === 'string' ? value : c.type === 'category' ? NONE : null} onChange={(v) => set(c.key, v === NONE ? null : v)} />
+              {c.hint && <span className="text-xs text-muted">{c.hint}</span>}
+            </div>
+          );
+        }
+        if (c.type === 'list') {
+          return (
+            <div key={c.key} className="flex flex-col gap-1">
+              <span className="text-muted">{c.label}</span>
+              <ChipListEditor label={c.label} values={Array.isArray(value) ? (value as string[]) : []} onChange={(v) => set(c.key, v)} />
+            </div>
+          );
+        }
+        return (
+          <Field key={c.key} label={c.label} hint={c.hint}>
+            <input
+              autoFocus={i === 0}
+              type={c.type === 'number' ? 'number' : c.type === 'time' ? 'time' : 'text'}
+              value={String(value ?? '')}
+              onChange={(e) => set(c.key, e.target.value)}
+              className={FIELD_INPUT}
+            />
+          </Field>
+        );
+      })}
+    </FormDialog>
   );
 }

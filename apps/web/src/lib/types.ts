@@ -34,12 +34,6 @@ export interface DigestArticle {
   readonly summary: string;
 }
 
-export interface Slot {
-  readonly id: string;
-  readonly position: number;
-  readonly label: string;
-}
-
 export interface MarketPoint {
   readonly series: string;
   readonly date: string;

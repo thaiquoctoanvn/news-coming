@@ -21,6 +21,7 @@ function Labels({ article, categoryName }: Props) {
   const impact = impactLabel(article.impact);
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
+      {article.isPinned && <Chip size="sm" variant="primary" color="danger">Tin nóng</Chip>}
       {categoryName && <Chip size="sm" variant="secondary">{categoryName}</Chip>}
       {impact && <Chip size="sm" variant="soft" color={article.impact !== null && article.impact >= 8 ? 'warning' : 'default'}>{impact}</Chip>}
       {direction && <Chip size="sm" variant="soft" color={direction.color}>{direction.label}</Chip>}

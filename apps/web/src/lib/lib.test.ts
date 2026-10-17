@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { chooseDigest, groupArticles, impactLabel, paragraphs } from './digest.ts';
+import { chooseDigest, orderArticles, impactLabel, paragraphs } from './digest.ts';
 import { formatChange, relativeDay, safeUrl, vietnamDay } from './format.ts';
 import { chartRows, latestValues } from './market.ts';
 import type { DigestArticle } from './types.ts';
@@ -28,16 +28,11 @@ describe('chooseDigest', () => {
   });
 });
 
-describe('groupArticles', () => {
-  test('pinned first, then slots in order, then items of unknown slots', () => {
-    const groups = groupArticles(
-      [article('b', 3, 'fed'), article('pin', 1, null, true), article('a', 2, 'oil'), article('x', 4, 'gone')],
-      [{ id: 'fed', position: 2, label: 'FED' }, { id: 'oil', position: 1, label: 'Giá dầu' }],
-    );
+describe('orderArticles', () => {
+  test('pinned first, then by position', () => {
+    const ordered = orderArticles([article('b', 3, 'fed'), article('pin', 4, null, true), article('a', 2, 'oil')]);
 
-    expect(groups.map((g) => [g.label, g.articles.map((a) => a.id)])).toEqual([
-      ['Tin nóng', ['pin']], ['Giá dầu', ['a']], ['FED', ['b']], ['Tin khác', ['x']],
-    ]);
+    expect(ordered.map((a) => a.id)).toEqual(['pin', 'a', 'b']);
   });
 });
 

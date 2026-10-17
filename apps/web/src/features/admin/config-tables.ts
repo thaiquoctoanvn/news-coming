@@ -1,13 +1,16 @@
-// Definitions of the editable config tables (DESIGN.md §11, "Trang Cấu hình").
+// Generic editable tables (sources, data modules, AI models); other config sections have their own UI.
 // A key with a dot ("settings.summary_words") edits one field inside a jsonb column.
 
-export type ColumnType = 'switch' | 'text' | 'number' | 'list' | 'numberList' | 'time' | 'readonly';
+export type ColumnType = 'switch' | 'text' | 'number' | 'list' | 'numberList' | 'time' | 'category' | 'select' | 'readonly';
 
 export interface Column {
   readonly key: string;
   readonly label: string;
   readonly type: ColumnType;
   readonly hint?: string;
+  /** Choices of a 'select' column. */
+  readonly options?: readonly { readonly id: string; readonly label: string }[];
+  readonly required?: boolean;
 }
 
 export interface TableDef {
@@ -27,92 +30,26 @@ export interface TableDef {
 
 export const CONFIG_TABLES: readonly TableDef[] = [
   {
-    id: 'topic', title: 'Chủ đề', description: 'Tắt chủ đề là dừng toàn bộ: không lấy tin, không gọi AI, ẩn khỏi web.',
-    table: 'topics', topicScoped: false, keys: ['id'], order: 'position',
-    columns: [
-      { key: 'enabled', label: 'Bật', type: 'switch' },
-      { key: 'name_vi', label: 'Tên', type: 'text' },
-      { key: 'ai_daily_request_cap', label: 'Request AI/ngày', type: 'number' },
-      { key: 'settings.summary_words', label: 'Độ dài tóm tắt (từ)', type: 'number' },
-      { key: 'settings.more_batch_size', label: 'Tin mỗi lần Xem thêm', type: 'number' },
-      { key: 'settings.refresh_size', label: 'Tin mỗi lần Cập nhật', type: 'number' },
-      { key: 'settings.daily_cap_more', label: 'Lượt Xem thêm/ngày', type: 'number' },
-      { key: 'settings.daily_cap_refresh', label: 'Lượt Cập nhật/ngày', type: 'number' },
-      { key: 'settings.exclude_keywords', label: 'Từ khóa loại trừ', type: 'list', hint: 'phân cách bằng dấu phẩy; * ở cuối = tiền tố' },
-    ],
-  },
-  {
-    id: 'editions', title: 'Bản tin', description: 'Giờ chạy theo múi giờ của bản tin; thứ: 1 = Thứ Hai … 7 = Chủ Nhật.',
-    table: 'editions', topicScoped: true, keys: ['topic_id', 'id'], order: 'local_time',
-    columns: [
-      { key: 'enabled', label: 'Bật', type: 'switch' },
-      { key: 'name_vi', label: 'Tên', type: 'text' },
-      { key: 'timezone', label: 'Múi giờ', type: 'readonly' },
-      { key: 'local_time', label: 'Giờ chạy', type: 'time' },
-      { key: 'weekdays', label: 'Thứ', type: 'numberList' },
-      { key: 'size_min', label: 'Tối thiểu', type: 'number' },
-      { key: 'size_max', label: 'Tối đa', type: 'number' },
-      { key: 'run_modules', label: 'Cập nhật số liệu', type: 'switch' },
-    ],
-  },
-  {
-    id: 'slots', title: 'Thứ tự ưu tiên (slot)', description: 'Bản tin lấp slot theo thứ tự; điểm sàn loại tin yếu.',
-    table: 'digest_slots', topicScoped: true, keys: ['topic_id', 'id'], order: 'position',
-    columns: [
-      { key: 'enabled', label: 'Bật', type: 'switch' },
-      { key: 'position', label: 'Thứ tự', type: 'number' },
-      { key: 'label_vi', label: 'Tên', type: 'text' },
-      { key: 'kind', label: 'Kiểu', type: 'readonly' },
-      { key: 'category_ids', label: 'Danh mục', type: 'list' },
-      { key: 'entity_ids', label: 'Tổ chức', type: 'list' },
-      { key: 'max_items', label: 'Tối đa', type: 'number' },
-      { key: 'min_score', label: 'Điểm sàn', type: 'number' },
-      { key: 'extra_item_min_score', label: 'Sàn tin thứ 2+', type: 'number' },
-    ],
-  },
-  {
-    id: 'categories', title: 'Danh mục', description: 'Từ khóa lọc trước khi gọi AI; mô tả tiếng Anh giúp AI xếp đúng danh mục.',
-    table: 'categories', topicScoped: true, keys: ['topic_id', 'id'], order: 'position',
-    columns: [
-      { key: 'enabled', label: 'Bật', type: 'switch' },
-      { key: 'id', label: 'Mã', type: 'readonly' },
-      { key: 'name_vi', label: 'Tên', type: 'text' },
-      { key: 'keywords', label: 'Từ khóa', type: 'list' },
-      { key: 'exclude_keywords', label: 'Loại trừ', type: 'list' },
-      { key: 'description_en', label: 'Mô tả cho AI', type: 'text' },
-    ],
-  },
-  {
-    id: 'entities', title: 'Tổ chức theo dõi', description: 'Tên gọi khác dùng để nhận ra tổ chức trong tin.',
-    table: 'entities', topicScoped: true, keys: ['topic_id', 'id'], order: 'position',
-    columns: [
-      { key: 'enabled', label: 'Bật', type: 'switch' },
-      { key: 'id', label: 'Mã', type: 'readonly' },
-      { key: 'name', label: 'Tên', type: 'text' },
-      { key: 'aliases', label: 'Tên gọi khác', type: 'list' },
-      { key: 'sec_cik', label: 'SEC CIK', type: 'text' },
-    ],
-  },
-  {
     id: 'sources', title: 'Nguồn tin', description: 'Lỗi gần nhất của nguồn hiện ở cột cuối.',
     table: 'sources', topicScoped: true, keys: ['id'], order: 'name',
     columns: [
       { key: 'enabled', label: 'Bật', type: 'switch' },
-      { key: 'name', label: 'Tên', type: 'text' },
+      { key: 'name', label: 'Tên', type: 'text', required: true },
       { key: 'kind', label: 'Loại', type: 'readonly' },
-      { key: 'url', label: 'URL', type: 'text' },
-      { key: 'query', label: 'Truy vấn', type: 'text' },
-      { key: 'default_category_id', label: 'Danh mục', type: 'text' },
-      { key: 'authority', label: 'Uy tín', type: 'number' },
+      { key: 'url', label: 'URL', type: 'text', hint: 'Địa chỉ RSS (với nguồn RSS)' },
+      { key: 'query', label: 'Truy vấn', type: 'text', hint: 'Từ khóa tìm kiếm (với nguồn Google News)' },
+      { key: 'default_category_id', label: 'Danh mục', type: 'category', hint: 'Dùng khi tin không khớp từ khóa danh mục nào' },
+      { key: 'authority', label: 'Uy tín', type: 'number', hint: 'Điểm cộng thêm cho tin của nguồn; ≥ 10 = nguồn chính thức, luôn qua bước lọc' },
       { key: 'last_error', label: 'Lỗi gần nhất', type: 'readonly' },
     ],
     insert: {
       columns: [
-        { key: 'name', label: 'Tên', type: 'text' },
-        { key: 'kind', label: 'Loại (rss | google_news)', type: 'text' },
-        { key: 'url', label: 'URL (RSS)', type: 'text' },
-        { key: 'query', label: 'Truy vấn (Google News)', type: 'text' },
-        { key: 'default_category_id', label: 'Danh mục', type: 'text' },
+        { key: 'name', label: 'Tên', type: 'text', required: true },
+        { key: 'kind', label: 'Loại', type: 'select', required: true, options: [{ id: 'rss', label: 'RSS' }, { id: 'google_news', label: 'Google News' }] },
+        { key: 'url', label: 'URL', type: 'text', hint: 'Địa chỉ RSS (với nguồn RSS)' },
+        { key: 'query', label: 'Truy vấn', type: 'text', hint: 'Từ khóa tìm kiếm (với nguồn Google News)' },
+        { key: 'default_category_id', label: 'Danh mục', type: 'category' },
+        { key: 'authority', label: 'Uy tín', type: 'number' },
       ],
       defaults: { kind: 'rss', authority: 0, enabled: true },
     },
@@ -123,25 +60,27 @@ export const CONFIG_TABLES: readonly TableDef[] = [
     table: 'data_modules', topicScoped: true, keys: ['topic_id', 'id'], order: 'id',
     columns: [
       { key: 'enabled', label: 'Bật', type: 'switch' },
-      { key: 'name_vi', label: 'Tên', type: 'text' },
+      { key: 'name_vi', label: 'Tên', type: 'text', required: true },
       { key: 'connector', label: 'Nguồn', type: 'readonly' },
     ],
   },
-  {
-    id: 'ai', title: 'Model AI (dùng chung)', description: 'Thứ tự ưu tiên và hạn mức free; router dừng ở 80% hạn mức/ngày.',
-    table: 'ai_providers', topicScoped: false, keys: ['id'], order: 'priority',
-    columns: [
-      { key: 'enabled', label: 'Bật', type: 'switch' },
-      { key: 'role', label: 'Vai trò', type: 'readonly' },
-      { key: 'priority', label: 'Ưu tiên', type: 'number' },
-      { key: 'model', label: 'Model', type: 'text' },
-      { key: 'daily_request_limit', label: 'Request/ngày', type: 'number' },
-      { key: 'daily_token_limit', label: 'Token/ngày', type: 'number' },
-      { key: 'rpm_limit', label: 'Request/phút', type: 'number' },
-      { key: 'tpm_limit', label: 'Token/phút', type: 'number' },
-    ],
-  },
 ];
+
+/** Shared AI models: shown on the operations page next to today's usage. */
+export const AI_TABLE: TableDef = {
+  id: 'ai', title: 'Model AI (dùng chung)', description: 'Thứ tự ưu tiên và hạn mức free; router dừng ở 80% hạn mức/ngày.',
+  table: 'ai_providers', topicScoped: false, keys: ['id'], order: 'priority',
+  columns: [
+    { key: 'enabled', label: 'Bật', type: 'switch' },
+    { key: 'role', label: 'Vai trò', type: 'readonly' },
+    { key: 'priority', label: 'Ưu tiên', type: 'number' },
+    { key: 'model', label: 'Model', type: 'text', required: true },
+    { key: 'daily_request_limit', label: 'Request/ngày', type: 'number' },
+    { key: 'daily_token_limit', label: 'Token/ngày', type: 'number' },
+    { key: 'rpm_limit', label: 'Request/phút', type: 'number' },
+    { key: 'tpm_limit', label: 'Token/phút', type: 'number' },
+  ],
+};
 
 // ---------- Value conversion between table cells and columns ----------
 
