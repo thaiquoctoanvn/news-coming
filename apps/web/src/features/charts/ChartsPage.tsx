@@ -1,7 +1,7 @@
-import { Card, Tabs } from '@heroui/react';
-import type { Key } from 'react';
+import { Card } from '@heroui/react';
 import { useParams, useSearchParams } from 'react-router';
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { SegmentedTabs } from '../../components/SegmentedTabs.tsx';
 import { EmptyState, ErrorState, LoadingCards } from '../../components/States.tsx';
 import { formatNumber, formatShortDate } from '../../lib/format.ts';
 import { SERIES, chartRows } from '../../lib/market.ts';
@@ -34,13 +34,7 @@ export function ChartsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-serif text-2xl font-bold">Biểu đồ</h1>
-        <Tabs selectedKey={range.id} onSelectionChange={(key: Key) => setParams({ range: String(key) })}>
-          <Tabs.ListContainer>
-            <Tabs.List aria-label="Khoảng thời gian">
-              {RANGES.map((r) => <Tabs.Tab key={r.id} id={r.id}>{r.label}<Tabs.Indicator /></Tabs.Tab>)}
-            </Tabs.List>
-          </Tabs.ListContainer>
-        </Tabs>
+        <SegmentedTabs ariaLabel="Khoảng thời gian" items={RANGES} selectedKey={range.id} onChange={(id) => setParams({ range: id })} />
       </div>
 
       {market.isPending && <LoadingCards count={3} />}

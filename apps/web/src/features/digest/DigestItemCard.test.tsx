@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, test } from 'vitest';
 import type { DigestArticle } from '../../lib/types.ts';
@@ -26,15 +26,17 @@ describe('DigestItemCard', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
-  test('expands the remaining paragraphs as plain text', async () => {
+  test('opens the full summary in a dialog as plain text', async () => {
     const user = userEvent.setup();
     render(<DigestItemCard article={article} categoryName="Dầu" />);
 
-    await user.click(screen.getByRole('button', { name: /Đọc tiếp/ }));
+    await user.click(screen.getByRole('button', { name: 'Xem thêm' }));
 
-    expect(screen.getByText('Đoạn hai <script>alert(1)</script> chỉ là chữ.')).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Đoạn một về giá dầu.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Đoạn hai <script>alert(1)</script> chỉ là chữ.')).toBeInTheDocument();
     expect(document.querySelector('script')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Thu gọn' })).toHaveAttribute('aria-expanded', 'true');
+    expect(within(dialog).getByRole('link', { name: /Đọc bài gốc/ })).toHaveAttribute('href', 'https://www.cnbc.com/oil');
   });
 
   test('does not render a link for unsafe URLs', () => {

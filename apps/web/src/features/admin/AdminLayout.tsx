@@ -6,7 +6,7 @@ import { useAuth } from '../../lib/auth.tsx';
 import { useTopics } from '../../lib/queries.ts';
 
 function navClass({ isActive }: { isActive: boolean }): string {
-  const base = 'rounded-full px-3 py-1.5 text-sm font-medium transition-colors';
+  const base = 'min-w-0 truncate rounded-full px-3 py-1.5 text-sm font-medium transition-colors';
   return isActive ? `${base} bg-foreground text-background` : `${base} text-muted hover:bg-surface hover:text-foreground`;
 }
 
@@ -26,17 +26,17 @@ export function AdminLayout() {
       <header className="border-b border-border">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
           <span className="mr-auto font-serif text-xl font-bold">Quản trị</span>
-          <nav aria-label="Quản trị" className="flex gap-1">
+          <nav aria-label="Quản trị" className="flex min-w-0 gap-1">
             <NavLink to={`/quan-tri${query}`} end className={navClass}>Vận hành</NavLink>
             <NavLink to={`/quan-tri/cau-hinh${query}`} className={navClass}>Cấu hình</NavLink>
             <NavLink to={topicId ? `/t/${topicId}` : '/'} className={navClass({ isActive: false })}>Trang tin</NavLink>
           </nav>
-          <label className="flex items-center gap-2 text-sm text-muted">
+          <label className="flex min-w-0 items-center gap-2 text-sm text-muted">
             Chủ đề
             <select
               value={topicId}
               onChange={(e) => setParams({ topic: e.target.value })}
-              className="rounded-lg border border-border bg-background px-2 py-1 text-foreground"
+              className="min-w-0 max-w-48 truncate rounded-lg border border-border bg-background px-2 py-1 text-foreground"
             >
               {(topics.data ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
