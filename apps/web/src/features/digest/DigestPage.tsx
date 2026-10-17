@@ -1,12 +1,13 @@
-import { Button, Tabs } from '@heroui/react';
-import type { Key } from 'react';
+import { Button } from '@heroui/react';
 import { useParams, useSearchParams } from 'react-router';
+import { MasonryGrid } from '../../components/MasonryGrid.tsx';
+import { SegmentedTabs } from '../../components/SegmentedTabs.tsx';
 import { EmptyState, ErrorState, LoadingCards } from '../../components/States.tsx';
 import { chooseDigest, groupArticles } from '../../lib/digest.ts';
 import { formatDigestDate } from '../../lib/format.ts';
 import { useCategories, useDigestArticles, useDigests, useEditions, useSlots } from '../../lib/queries.ts';
 import { AdminDigestActions } from './AdminDigestActions.tsx';
-import { DigestItemCard } from './DigestItemCard.tsx';
+import { DigestItemCard, estimateCardHeight } from './DigestItemCard.tsx';
 import { MarketStrip } from './MarketStrip.tsx';
 import { UpcomingEvents } from './UpcomingEvents.tsx';
 
@@ -29,32 +30,24 @@ export function DigestPage() {
       <MarketStrip topicId={topicId} />
 
       <section aria-label="Chọn bản tin" className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <Button isIconOnly size="sm" variant="ghost" aria-label="Ngày trước" isDisabled={!older} onPress={() => older && select(older)}>
             ‹
           </Button>
-          <h1 className="font-serif text-2xl font-bold">{choice.date ? formatDigestDate(choice.date) : 'Bản tin'}</h1>
+          <h1 className="min-w-0 truncate font-serif text-2xl font-bold">{choice.date ? formatDigestDate(choice.date) : 'Bản tin'}</h1>
           <Button isIconOnly size="sm" variant="ghost" aria-label="Ngày sau" isDisabled={!newer} onPress={() => newer && select(newer)}>
             ›
           </Button>
         </div>
         {choice.date && (editions.data?.length ?? 0) > 1 && (
-          <Tabs
+          <SegmentedTabs
+            ariaLabel="Bản tin trong ngày"
+            className="w-full sm:w-auto sm:max-w-md"
+            items={(editions.data ?? []).map((e) => ({ id: e.id, label: e.name }))}
             selectedKey={choice.digest?.editionId}
-            onSelectionChange={(key: Key) => choice.date && select(choice.date, String(key))}
+            onChange={(id) => choice.date && select(choice.date, id)}
             disabledKeys={(editions.data ?? []).filter((e) => !choice.editionIds.includes(e.id)).map((e) => e.id)}
-          >
-            <Tabs.ListContainer>
-              <Tabs.List aria-label="Bản tin trong ngày">
-                {(editions.data ?? []).map((e) => (
-                  <Tabs.Tab key={e.id} id={e.id}>
-                    {e.name}
-                    <Tabs.Indicator />
-                  </Tabs.Tab>
-                ))}
-              </Tabs.List>
-            </Tabs.ListContainer>
-          </Tabs>
+          />
         )}
       </section>
 
@@ -89,9 +82,12 @@ function DigestArticles({ topicId, digestId }: { topicId: string; digestId: stri
           <h2 id={`group-${group.key}`} className={`border-b pb-1 text-xs font-semibold uppercase tracking-[0.18em] ${group.key === 'pinned' ? 'border-danger text-danger' : 'border-border text-muted'}`}>
             {group.label}
           </h2>
-          {group.articles.map((a) => (
-            <DigestItemCard key={a.id} article={a} categoryName={a.categoryId ? categories.data?.get(a.categoryId) : undefined} />
-          ))}
+          <MasonryGrid
+            items={group.articles}
+            getKey={(a) => a.id}
+            estimate={estimateCardHeight}
+            renderItem={(a) => <DigestItemCard article={a} categoryName={a.categoryId ? categories.data?.get(a.categoryId) : undefined} />}
+          />
         </section>
       ))}
     </div>

@@ -25,3 +25,38 @@
 .summary-text p + p {
   margin-top: 0.75rem;
 }
+
+/*
+ * Tabs: HeroUI sizes the list to its content and fixes each tab at h-8, so long labels spill out
+ * on narrow screens. Fit the list to its container instead; labels wrap and clamp (see SegmentedTabs).
+ */
+.tabs {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tabs__list[data-orientation="horizontal"] {
+  width: 100%;
+  min-width: 0;
+}
+
+.tabs__tab {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: auto;
+  min-height: 2rem;
+  padding-block: 0.25rem;
+  line-height: 1.25;
+}
+
+/* Chips never grow past their container; long labels end with an ellipsis. */
+.chip {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.chip__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,6 +1,6 @@
-import { Chip, Link, Tabs } from '@heroui/react';
-import type { Key } from 'react';
+import { Chip, Link } from '@heroui/react';
 import { useParams, useSearchParams } from 'react-router';
+import { SegmentedTabs } from '../../components/SegmentedTabs.tsx';
 import { EmptyState, ErrorState, LoadingCards } from '../../components/States.tsx';
 import { formatDigestDate, formatTime, relativeDay, safeUrl, vietnamDay } from '../../lib/format.ts';
 import { useEvents } from '../../lib/queries.ts';
@@ -11,6 +11,11 @@ const IMPORTANCE: Readonly<Record<number, { label: string; color: 'danger' | 'wa
   2: { label: 'Quan trọng', color: 'warning' },
   1: { label: 'Theo dõi', color: 'default' },
 };
+
+const FILTERS = [
+  { id: 'major', label: 'Rất quan trọng' },
+  { id: 'all', label: 'Tất cả' },
+] as const;
 
 export function groupByDay(events: readonly CalendarEvent[]): [string, CalendarEvent[]][] {
   const days = new Map<string, CalendarEvent[]>();
@@ -28,18 +33,16 @@ export function CalendarPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h1 className="font-serif text-2xl font-bold">Lịch sự kiện vĩ mô</h1>
           <p className="text-sm text-muted">Giờ Việt Nam. Từ hôm qua tới 45 ngày tới.</p>
         </div>
-        <Tabs selectedKey={showAll ? 'all' : 'major'} onSelectionChange={(key: Key) => setParams(key === 'all' ? { filter: 'all' } : {})}>
-          <Tabs.ListContainer>
-            <Tabs.List aria-label="Lọc sự kiện">
-              <Tabs.Tab id="major">Rất quan trọng<Tabs.Indicator /></Tabs.Tab>
-              <Tabs.Tab id="all">Tất cả<Tabs.Indicator /></Tabs.Tab>
-            </Tabs.List>
-          </Tabs.ListContainer>
-        </Tabs>
+        <SegmentedTabs
+          ariaLabel="Lọc sự kiện"
+          items={FILTERS}
+          selectedKey={showAll ? 'all' : 'major'}
+          onChange={(id) => setParams(id === 'all' ? { filter: 'all' } : {})}
+        />
       </div>
 
       {events.isPending && <LoadingCards count={2} />}
