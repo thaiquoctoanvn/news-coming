@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import {
-  fetchCategories, fetchDigestArticles, fetchDigests, fetchEditions, fetchEvents, fetchMarketData, fetchSlots, fetchTopics,
+  fetchCategories, fetchDigestArticles, fetchDigests, fetchEditions, fetchEvents, fetchMarketData, fetchTopics,
 } from './api.ts';
 import { useSupabase } from './supabase.ts';
 
@@ -33,11 +33,6 @@ export function useDigestArticles(digestId: string | undefined) {
     enabled: Boolean(digestId),
     staleTime: FIVE_MINUTES,
   });
-}
-
-export function useSlots(topicId: string) {
-  const db = useSupabase();
-  return useQuery({ queryKey: ['slots', topicId], queryFn: () => fetchSlots(db, topicId), staleTime: ONE_HOUR });
 }
 
 export function useCategories(topicId: string) {

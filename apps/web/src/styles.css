@@ -40,6 +40,16 @@
   min-width: 0;
 }
 
+/* Concentric corners: inner radius = outer radius − list padding (p-1), so tab, indicator and track line up. */
+.tabs:not(.tabs--secondary) .tabs__list-container {
+  --tabs-radius: 1.25rem;
+  border-radius: var(--tabs-radius);
+}
+
+.tabs:not(.tabs--secondary) :is(.tabs__tab, .tabs__indicator) {
+  border-radius: calc(var(--tabs-radius) - 0.25rem);
+}
+
 .tabs__tab {
   flex: 1 1 auto;
   min-width: 0;

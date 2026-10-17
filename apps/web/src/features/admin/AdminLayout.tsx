@@ -31,16 +31,18 @@ export function AdminLayout() {
             <NavLink to={`/quan-tri/cau-hinh${query}`} className={navClass}>Cấu hình</NavLink>
             <NavLink to={topicId ? `/t/${topicId}` : '/'} className={navClass({ isActive: false })}>Trang tin</NavLink>
           </nav>
-          <label className="flex min-w-0 items-center gap-2 text-sm text-muted">
-            Chủ đề
-            <select
-              value={topicId}
-              onChange={(e) => setParams({ topic: e.target.value })}
-              className="min-w-0 max-w-48 truncate rounded-lg border border-border bg-background px-2 py-1 text-foreground"
-            >
-              {(topics.data ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </label>
+          {(topics.data?.length ?? 0) > 1 && (
+            <label className="flex min-w-0 items-center gap-2 text-sm text-muted">
+              Chủ đề
+              <select
+                value={topicId}
+                onChange={(e) => setParams({ topic: e.target.value })}
+                className="min-w-0 max-w-48 truncate rounded-lg border border-border bg-background px-2 py-1 text-foreground"
+              >
+                {(topics.data ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </label>
+          )}
           <ThemeToggle />
           <Button size="sm" variant="ghost" onPress={() => void auth.signOut()}>Đăng xuất</Button>
         </div>

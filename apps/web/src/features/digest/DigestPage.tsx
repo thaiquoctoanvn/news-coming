@@ -3,9 +3,9 @@ import { useParams, useSearchParams } from 'react-router';
 import { MasonryGrid } from '../../components/MasonryGrid.tsx';
 import { SegmentedTabs } from '../../components/SegmentedTabs.tsx';
 import { EmptyState, ErrorState, LoadingCards } from '../../components/States.tsx';
-import { chooseDigest, groupArticles } from '../../lib/digest.ts';
+import { chooseDigest, orderArticles } from '../../lib/digest.ts';
 import { formatDigestDate } from '../../lib/format.ts';
-import { useCategories, useDigestArticles, useDigests, useEditions, useSlots } from '../../lib/queries.ts';
+import { useCategories, useDigestArticles, useDigests, useEditions } from '../../lib/queries.ts';
 import { AdminDigestActions } from './AdminDigestActions.tsx';
 import { DigestItemCard, estimateCardHeight } from './DigestItemCard.tsx';
 import { MarketStrip } from './MarketStrip.tsx';
@@ -66,7 +66,6 @@ export function DigestPage() {
 
 function DigestArticles({ topicId, digestId }: { topicId: string; digestId: string }) {
   const articles = useDigestArticles(digestId);
-  const slots = useSlots(topicId);
   const categories = useCategories(topicId);
 
   if (articles.isPending) return <LoadingCards />;
@@ -76,20 +75,11 @@ function DigestArticles({ topicId, digestId }: { topicId: string; digestId: stri
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      {groupArticles(articles.data, slots.data ?? []).map((group) => (
-        <section key={group.key} aria-labelledby={`group-${group.key}`} className="flex flex-col gap-4">
-          <h2 id={`group-${group.key}`} className={`border-b pb-1 text-xs font-semibold uppercase tracking-[0.18em] ${group.key === 'pinned' ? 'border-danger text-danger' : 'border-border text-muted'}`}>
-            {group.label}
-          </h2>
-          <MasonryGrid
-            items={group.articles}
-            getKey={(a) => a.id}
-            estimate={estimateCardHeight}
-            renderItem={(a) => <DigestItemCard article={a} categoryName={a.categoryId ? categories.data?.get(a.categoryId) : undefined} />}
-          />
-        </section>
-      ))}
-    </div>
+    <MasonryGrid
+      items={orderArticles(articles.data)}
+      getKey={(a) => a.id}
+      estimate={estimateCardHeight}
+      renderItem={(a) => <DigestItemCard article={a} categoryName={a.categoryId ? categories.data?.get(a.categoryId) : undefined} />}
+    />
   );
 }

@@ -195,13 +195,14 @@ Seed cho Vĩ mô / Tài chính:
 | 1 | Giá dầu | category | oil | 1 (tin giải thích nguyên nhân) | 40 | oil_price |
 | 2 | FED | category | fed | 1–2 (tin 2 nếu ≥ 70) | 40 | — |
 | 3 | Lợi suất Mỹ + Nhật | category | yield_us, yield_jp | 1 | 40 | us_yields, jp_yields |
-| 4 | Tổ chức | per_entity | Strategy, BitMine, Coinbase, Circle, BlackRock | 0–5 | 35 | — |
-| 5 | Địa chính trị + Vàng | per_category | geo, gold | 1–2 | 45 | — |
-| 6 | Còn lại | fill | tất cả | phần còn lại | 50 | — |
+| 4 | Địa chính trị + Vàng | per_category | geo, gold | 1–2 | 45 | — |
+| 5 | Còn lại | fill | tất cả | phần còn lại | 50 | — |
 
 Edition `pre_us` chỉ xét tin sau `window_end` của edition trước cùng ngày, loại tin đã xuất hiện, và kèm sự kiện trong phiên Mỹ hôm đó.
 
-Thứ tự hiển thị: tin ghim → slot theo `position`.
+Slot "Tổ chức" (per_entity) đã bỏ ngày 2026-10-17 (migration `20261017000200_drop_entity_slot.sql`): dự án chỉ theo 1 chủ đề tài chính – địa chính trị, slot chỉ chọn theo danh mục.
+
+Thứ tự hiển thị: tin ghim → theo `position`, tất cả trong một lưới so le (không chia nhóm theo slot).
 
 ---
 
@@ -400,7 +401,7 @@ Code: `apps/web` (Vite 8 + React 19 + HeroUI v3 + Tailwind v4 + TanStack Query +
 
 | Route | Nội dung |
 |---|---|
-| `/t/:topicId` | Bản tin: dải số liệu (dầu, lợi suất Mỹ/Nhật, thay đổi so phiên trước), chọn ngày (‹ ›) và edition (tabs), sự kiện quan trọng sắp tới, tin theo nhóm (Tin nóng → slot theo thứ tự). Card: danh mục, mức tác động, chiều tác động, tiêu đề, nguồn/giờ/phút đọc, đoạn đầu + "Đọc tiếp", "Đọc bài gốc". URL giữ trạng thái `?date=&edition=` |
+| `/t/:topicId` | Bản tin: dải số liệu (dầu, lợi suất Mỹ/Nhật, thay đổi so phiên trước), chọn ngày (‹ ›) và edition (tabs), sự kiện quan trọng sắp tới, mọi tin trong một lưới so le (1–3 cột, tin ghim trước rồi theo `position`). Card: Tin nóng, danh mục, mức tác động, chiều tác động, tiêu đề, nguồn/giờ/phút đọc, đoạn đầu; "Xem thêm" mở popup đọc đầy đủ; "Đọc bài gốc". URL giữ trạng thái `?date=&edition=` |
 | `/t/:topicId/lich` | Lịch sự kiện theo ngày giờ VN, lọc "Rất quan trọng"/"Tất cả", ghi nguồn (FRED…) |
 | `/t/:topicId/bieu-do` | Biểu đồ lợi suất Mỹ, Nhật, giá dầu (1/3/12 tháng), tải lười để không làm nặng trang chính |
 
@@ -415,8 +416,8 @@ Code: `apps/web` (Vite 8 + React 19 + HeroUI v3 + Tailwind v4 + TanStack Query +
 | Route | Nội dung |
 |---|---|
 | `/dang-nhap` | Username → mã 6 số (InputOTP) |
-| `/quan-tri?topic=` | Vận hành: nút Cập nhật tin mới theo edition, lượng dùng AI hôm nay so hạn mức, lượt bấm đã dùng, lần pg_cron gọi GitHub, 15 lần chạy gần nhất (chấm/chọn/dịch/bỏ/loại, lỗi), nguồn đang lỗi |
-| `/quan-tri/cau-hinh?topic=` | Bảng sửa trực tiếp (công tắc lưu ngay, ô chữ lưu khi rời ô): chủ đề (bật/tắt, quota, độ dài tóm tắt, lượt nút, từ khóa loại trừ), bản tin (giờ, thứ, kích thước), slot, danh mục, tổ chức, nguồn (thêm/xóa, lỗi gần nhất), module số liệu, model AI |
+| `/quan-tri?topic=` | Vận hành: nút Cập nhật tin mới theo edition, lượng dùng AI hôm nay so hạn mức, lượt bấm đã dùng, lần pg_cron gọi GitHub, bảng Model AI (bật/tắt, ưu tiên, hạn mức), 15 lần chạy gần nhất (chấm/chọn/dịch/bỏ/loại, lỗi), nguồn đang lỗi |
+| `/quan-tri/cau-hinh?topic=` | Cài đặt chung (hạn mức AI, độ dài tóm tắt, giới hạn nút, từ khóa bỏ hẳn tin dạng chip); Bản tin (card: tên cố định, múi giờ dạng `UTC+7 · Giờ Việt Nam`, chọn giờ, chọn thứ, số tin); Thứ tự ưu tiên (danh sách chỉ đọc, kéo thả sắp xếp, thêm/sửa trong popup, chỉ theo danh mục, tooltip giải thích điểm); Danh mục (tên + mã chỉ đọc, từ khóa nhận diện / ngoại lệ dạng chip, mô tả cho AI sửa qua nút bút chì); Nguồn tin; Số liệu & lịch. Mọi mục (kể cả Cài đặt chung, card Bản tin, Danh mục) hiển thị chỉ đọc, chỉ công tắc bật/tắt bấm tại chỗ; nút bút chì / Thêm mở popup có Hủy / OK, chỉ lưu khi bấm OK; mọi chỗ chọn danh mục là dropdown từ danh sách danh mục. Không còn bảng Chủ đề và Tổ chức. Model AI nằm ở trang Vận hành |
 
 Admin đăng nhập thấy thêm link "Quản trị" ở header và nút "Xem thêm tin" cuối mỗi bản tin. Mọi thao tác ghi đều chạy với quyền admin nên RLS vẫn chặn khi phiên quá 15 ngày.
 

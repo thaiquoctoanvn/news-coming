@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { CalendarEvent, DigestArticle, DigestSummary, Direction, Edition, MarketPoint, Slot, Topic } from './types.ts';
+import type { CalendarEvent, DigestArticle, DigestSummary, Direction, Edition, MarketPoint, Topic } from './types.ts';
 
 // Read-only queries for the public site. Column lists match the anon grants
 // (supabase/migrations/*_security.sql); RLS hides disabled topics and untranslated articles.
@@ -62,11 +62,6 @@ export async function fetchDigestArticles(db: SupabaseClient, digestId: string):
       direction: a.direction, title: a.title_vi, summary: a.summary_vi,
     }];
   });
-}
-
-export async function fetchSlots(db: SupabaseClient, topicId: string): Promise<Slot[]> {
-  const rows = check(await db.from('digest_slots').select('id, position, label_vi').eq('topic_id', topicId), 'slots');
-  return (rows as { id: string; position: number; label_vi: string }[]).map((r) => ({ id: r.id, position: r.position, label: r.label_vi }));
 }
 
 export async function fetchCategories(db: SupabaseClient, topicId: string): Promise<Map<string, string>> {

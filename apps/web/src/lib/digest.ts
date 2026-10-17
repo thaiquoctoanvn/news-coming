@@ -1,4 +1,4 @@
-import type { DigestArticle, DigestSummary, Direction, Slot } from './types.ts';
+import type { DigestArticle, DigestSummary, Direction } from './types.ts';
 
 // Pure helpers for the digest page (unit-tested).
 
@@ -18,24 +18,9 @@ export function chooseDigest(digests: readonly DigestSummary[], date: string | n
   return { dates, date: selectedDate, editionIds: ofDay.map((d) => d.editionId), digest };
 }
 
-export interface ArticleGroup {
-  readonly key: string;
-  readonly label: string;
-  readonly articles: readonly DigestArticle[];
-}
-
-/** Pinned items first, then one group per slot in slot order. */
-export function groupArticles(articles: readonly DigestArticle[], slots: readonly Slot[]): ArticleGroup[] {
-  const ordered = [...articles].sort((a, b) => a.position - b.position);
-  const pinned = ordered.filter((a) => a.isPinned);
-  const groups: ArticleGroup[] = pinned.length > 0 ? [{ key: 'pinned', label: 'Tin nóng', articles: pinned }] : [];
-  for (const slot of [...slots].sort((a, b) => a.position - b.position)) {
-    const inSlot = ordered.filter((a) => !a.isPinned && a.slotId === slot.id);
-    if (inSlot.length > 0) groups.push({ key: slot.id, label: slot.label, articles: inSlot });
-  }
-  const unslotted = ordered.filter((a) => !a.isPinned && !slots.some((s) => s.id === a.slotId));
-  if (unslotted.length > 0) groups.push({ key: 'other', label: 'Tin khác', articles: unslotted });
-  return groups;
+/** Digest order: pinned items first, then by position. */
+export function orderArticles(articles: readonly DigestArticle[]): DigestArticle[] {
+  return [...articles].sort((a, b) => Number(b.isPinned) - Number(a.isPinned) || a.position - b.position);
 }
 
 export function impactLabel(impact: number | null): string | null {
