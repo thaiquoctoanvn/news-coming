@@ -425,3 +425,6 @@ verify_jwt = false
 
 [functions.trigger-refresh]
 verify_jwt = false
+
+[functions.category-assist]
+verify_jwt = false

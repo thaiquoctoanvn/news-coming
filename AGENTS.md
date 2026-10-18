@@ -25,16 +25,16 @@
 - Run entirely on free tiers (Supabase, Netlify, GitHub Actions, free AI APIs) — zero cost is a hard constraint, not a preference.
 - Minimize AI token use: deterministic code for fetching, dedup and filtering; AI only for scoring, summarizing and translating the few items that are actually shown.
 - Never stop on quota: every pipeline step is idempotent and resumable; running out of quota delays work, it does not break the system.
-- Deliver a short, prioritized Vietnamese digest (10–12 items) per topic, with configuration fully driven from the database and toggleable at every level.
+- Deliver a short, prioritized Vietnamese digest (10–12 items) on **one product topic: finance & geopolitics** (`macro_finance`), with configuration fully driven from the database and toggleable at every level. The schema stays topic-scoped, but the UI no longer manages topics or entities.
 - Keep the public site safe: public read only for enabled topics; all writes and quota-consuming actions are admin-only and enforced in Postgres (RLS).
 
 ---
 
 ## Project Snapshot
 
-- **Status:** Phase 6 — all planned features exist: scheduled editions (worker), public web, admin login (OTP), config and operations pages, "Xem thêm" / "Cập nhật tin mới" (Edge Functions `admin-login`, `more-news`, `trigger-refresh`). Pipeline core shared by worker and Edge Functions lives in `supabase/functions/_shared/pipeline/`. The source of truth is `@docs/DESIGN.md`.
+- **Status:** Phase 6+ — all planned features exist: scheduled editions (worker), public web (masonry digest with detail popup, calendar, charts incl. gold), admin login (OTP, button in the header), config page (read-only views, edits in popups with Hủy / OK, drag-sorted priority slots, category dropdowns, "AI gợi ý" for category keywords) and operations page (incl. AI models), "Xem thêm" / "Cập nhật tin mới" (Edge Functions `admin-login`, `more-news`, `trigger-refresh`, `category-assist`). User guide: `README.md`. Pipeline core shared by worker and Edge Functions lives in `supabase/functions/_shared/pipeline/`. The source of truth is `@docs/DESIGN.md`.
 - **Stack (planned):** TypeScript everywhere; pnpm monorepo; web = Vite + React SPA + HeroUI v3 + Tailwind v4 + TanStack Query + react-hook-form + zod; worker = Node 24 running `.ts` directly (type stripping, `erasableSyntaxOnly`) on GitHub Actions; Supabase (Postgres, RLS, Auth email OTP via Resend, Edge Functions on Deno, pg_cron, Realtime); Netlify static hosting.
-- **Architecture:** topic is the top-level unit (categories, entities, sources, slots, editions, data modules all belong to a topic). Layout: `apps/web`, `apps/worker`, `supabase/{migrations,seed,functions}`, shared core in `supabase/functions/_shared/` (fetch-only TS used by both worker and Edge Functions).
+- **Architecture:** topic is the top-level unit in the schema (categories, entities, sources, slots, editions, data modules all belong to a topic); the product runs a single topic and slots select by category only. Layout: `apps/web`, `apps/worker`, `supabase/{migrations,seed,functions}`, shared core in `supabase/functions/_shared/` (fetch-only TS used by both worker and Edge Functions).
 - **Data layer:** web talks to Supabase directly with the anon key + RLS (no custom API layer); worker uses the service_role key; AI providers (Groq for scoring/summary, Gemini for translation, with fallbacks) are configured in DB tables.
 - **Delivery:** every change goes through a PR; merging to `main` auto-deploys DB migrations → Edge Functions → web → `prod` tag for the worker (`@docs/DESIGN.md` §13).
 

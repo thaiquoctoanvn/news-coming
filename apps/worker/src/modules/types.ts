@@ -24,6 +24,8 @@ export interface DataModule {
   readonly id: string;
   readonly connector: string;
   readonly config: Readonly<Record<string, unknown>>;
+  /** False when the module has no market data yet; market connectors then fetch a longer history once. */
+  readonly hasMarketData?: boolean;
 }
 
 export interface ModuleStore {

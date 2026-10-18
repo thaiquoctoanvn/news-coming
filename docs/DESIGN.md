@@ -2,6 +2,8 @@
 
 Hệ thống bản tin theo **topic**: mỗi topic tự động lấy tin từ nguồn đã cấu hình, chấm điểm, tóm tắt, dịch sang tiếng Việt và hiển thị trên web. Topic đầu tiên: **Vĩ mô / Tài chính**.
 
+> **Định hướng sản phẩm (2026-10-17):** dự án chỉ xoay quanh **một chủ đề tài chính – địa chính trị** (`macro_finance`). Schema vẫn giữ topic là cấp cao nhất, nhưng giao diện không còn quản lý chủ đề và tổ chức theo dõi; slot chỉ chọn tin theo danh mục. Hướng dẫn sử dụng: `README.md`.
+
 > **Rule cứng:** 100% free tier. Mọi quyết định thiết kế ưu tiên (1) không phát sinh chi phí, (2) tiêu thụ token tối thiểu, (3) hết quota thì chậm lại chứ không gián đoạn.
 
 ---
@@ -60,7 +62,7 @@ Prompt chấm điểm không hardcode cho tài chính: được dựng từ `top
 |---|---|
 | Categories | `oil` Dầu · `fed` FED · `treasury` Bộ Tài chính Mỹ · `yield_us` Lợi suất Mỹ · `yield_jp` Lợi suất Nhật · `institution` Tổ chức · `geo` Địa chính trị · `gold` Vàng · `tokenization` Token hóa tài sản · `crypto` Crypto khác · `other` Khác |
 | Entities | Strategy, BitMine, Coinbase, Circle, BlackRock (+ Vanguard, Grayscale, Binance — tắt sẵn hoặc chỉ dùng cho slot "Còn lại") |
-| Data modules | `oil_price` (WTI/Brent) · `us_yields` (2Y/10Y/30Y) · `jp_yields` (JGB 10Y/30Y) · `macro_calendar` (FOMC, CPI, NFP, PCE, đấu giá TPCP, BOJ) |
+| Data modules | `oil_price` (WTI/Brent) · `gold_price` (vàng COMEX) · `us_yields` (2Y/10Y/30Y) · `jp_yields` (JGB 10Y/30Y) · `macro_calendar` (FOMC, CPI, NFP, PCE, đấu giá TPCP, BOJ) |
 | Editions | `morning` 06:00 Asia/Ho_Chi_Minh hằng ngày, 10–12 tin · `pre_us` 08:45 America/New_York T2–T6, 6–8 tin |
 | Slots | §5 |
 | Sources | §7 |
@@ -211,11 +213,12 @@ Thứ tự hiển thị: tin ghim → theo `position`, tất cả trong một l�
 | Nút | Cơ chế | Chi phí | Thời gian |
 |---|---|---|---|
 | Xem thêm (cuối trang bản tin, chỉ admin) | Edge Function `more-news(digestId)` → `addMoreToDigest` (`_shared/pipeline/more.ts`): tin `scored` trong khung giờ của digest, điểm cao nhất, khác `story_key` đã có, **đọc được** (thay vì ghép bài khác) → tóm tắt + dịch + kiểm tra trung thực → `digest_items.added_by = 'more'`. Mặc định 4 tin/lần (`settings.more_batch_size`) để vừa giới hạn 150s của Edge Function với 8K token/phút của Groq | ~2 request tóm tắt + 2 dịch | 1–2 phút |
+| AI gợi ý (popup sửa danh mục, trang Cấu hình) | Edge Function `category-assist(topicId, categoryId, brief)` (`_shared/category-assist.ts`): từ mô tả admin nhập (≤ 600 ký tự, tiếng Việt được) → gợi ý từ khóa nhận diện, từ khóa ngoại lệ (tiếng Anh, chữ thường) và mô tả cho AI. **Không lưu gì**: admin chọn gợi ý trong popup rồi bấm OK mới lưu. Lượt/ngày `settings.daily_cap_assist` (10), quota action `assist` | 1 request extract (Groq) | vài giây |
 | Cập nhật tin mới (trang Vận hành) | Edge Function `trigger-refresh(topicId, editionId)` → GitHub `workflow_dispatch` `run.yml` với `refresh=true` → worker `edition --refresh`: thu thập + chấm điểm tin mới từ cuối khung giờ cũ, thêm tối đa `settings.refresh_size` (6) tin đọc được vào bản tin hôm nay (`added_by = 'refresh'`), dời `window_end` | ~7–9 request | 5–15 phút |
 
-- Giới hạn lượt/ngày theo topic (`settings.daily_cap_more`, `daily_cap_refresh`), trừ atomic bằng `use_action_quota()` (chỉ service_role).
+- Giới hạn lượt/ngày theo topic (`settings.daily_cap_more`, `daily_cap_refresh`, `daily_cap_assist`), trừ atomic bằng `use_action_quota()` (chỉ service_role).
 - Hết quota AI giữa chừng → tin đã chọn giữ trạng thái `selected`/`summarized`, lần chạy kế tiếp làm nốt.
-- Code lõi pipeline (AI steps, đọc bài, store, more) nằm ở `supabase/functions/_shared/pipeline/`, dùng chung cho worker (Node) và Edge Functions (Deno; import map ở `supabase/functions/*/deno.json`). CI có job `deno check` cho cả 3 function.
+- Code lõi pipeline (AI steps, đọc bài, store, more) nằm ở `supabase/functions/_shared/pipeline/`, dùng chung cho worker (Node) và Edge Functions (Deno; import map ở `supabase/functions/*/deno.json`). CI có job `deno check` cho mọi function.
 
 ---|---|---|---|
 | Xem thêm | Edge Function `more-news(digest_id)`: lấy 5–8 tin `scored` tiếp theo của digest đó → tóm tắt + dịch → thêm `digest_items` (`added_by = 'more'`) | ~2 req | 10–20 s |
@@ -259,7 +262,7 @@ Query Google News khởi điểm (mỗi query là 1 source):
 
 ### 7.2 Data modules
 
-Code: `apps/worker/src/modules/`. Chạy trước bước thu thập tin khi `editions.run_modules = true`, hoặc riêng bằng lệnh `modules`. Module lỗi không làm hỏng bản tin: lỗi ghi vào `crawl_runs.stats.modules`, dữ liệu cũ giữ nguyên.
+Code: `apps/worker/src/modules/`. Yahoo lấy 10 ngày gần nhất mỗi lần; module chưa có dòng `market_data` nào thì lấy 1 năm một lần để biểu đồ có dữ liệu ngay. Chạy trước bước thu thập tin khi `editions.run_modules = true`, hoặc riêng bằng lệnh `modules`. Module lỗi không làm hỏng bản tin: lỗi ghi vào `crawl_runs.stats.modules`, dữ liệu cũ giữ nguyên.
 
 
 | Module | Loại | Nguồn | Ghi chú |
@@ -267,6 +270,7 @@ Code: `apps/worker/src/modules/`. Chạy trước bước thu thập tin khi `ed
 | `us_yields` | số liệu | Treasury Daily Yield Curve XML; dự phòng FRED (`DGS2`, `DGS10`, `DGS30`) nếu có `FRED_API_KEY` | FRED key free |
 | `jp_yields` | số liệu | MOF Japan `jgbcme.csv` | trễ 1 ngày làm việc |
 | `oil_price` | số liệu | Yahoo chart `CL=F`, `BZ=F` (gần realtime, **không chính thức**) → dự phòng EIA API v2 (`RWTC`, `RBRTE`) nếu có `EIA_API_KEY` | EIA key free, trễ ~1 ngày |
+| `gold_price` | số liệu | Yahoo chart `GC=F` (vàng COMEX kỳ hạn gần nhất, USD/ounce, **không chính thức**); không có nguồn dự phòng miễn phí | Thêm 2026-10-18 |
 | `macro_calendar` | lịch | FOMC (HTML `fomccalendars.htm`, 14:00 ET ngày cuối), BOJ (bảng lịch họp, ~12:00 Tokyo ngày cuối), đấu giá TPCP Mỹ 2–30 năm (FiscalData `upcoming_auctions`), CPI/NFP/PCE/PPI/GDP/JOLTS qua **FRED release calendar** (bls.gov chặn truy cập tự động; cần `FRED_API_KEY`) | Tên tiếng Việt từ bảng cố định trong code, không dùng AI. Lưu sự kiện từ 3 ngày trước tới 45 ngày tới |
 
 ---
@@ -436,6 +440,7 @@ news-coming/
 │     ├─ _shared/          # core TS thuần (fetch-only): AI providers, prompt builder, scoring, slot selection
 │     ├─ request-otp/
 │     ├─ more-news/
+│     ├─ category-assist/
 │     └─ trigger-refresh/
 ├─ .github/workflows/
 │  ├─ ci.yml               # kiểm tra cho PR và main

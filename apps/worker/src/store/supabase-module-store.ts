@@ -18,7 +18,13 @@ class SupabaseModuleStore implements ModuleStore {
     if (!topic.data) return [];
     const { data, error } = await this.db.from('data_modules').select('id, connector, config').eq('topic_id', topicId).eq('enabled', true);
     if (error) throw new Error(`load data modules: ${error.message}`);
-    return data as DataModule[];
+    return Promise.all((data as DataModule[]).map(async (m) => ({ ...m, hasMarketData: await this.hasMarketData(topicId, m.id) })));
+  }
+
+  private async hasMarketData(topicId: string, moduleId: string): Promise<boolean> {
+    const { data, error } = await this.db.from('market_data').select('series').eq('topic_id', topicId).eq('module_id', moduleId).limit(1);
+    if (error) throw new Error(`check market data: ${error.message}`);
+    return data.length > 0;
   }
 
   async upsertMarketData(topicId: string, moduleId: string, points: readonly MarketPoint[]): Promise<void> {

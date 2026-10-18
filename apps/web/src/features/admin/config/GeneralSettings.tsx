@@ -23,6 +23,7 @@ const FIELDS: readonly NumberSetting[] = [
   { key: 'settings.daily_cap_more', label: 'Lượt “Xem thêm” mỗi ngày', help: 'Số lần được bấm Xem thêm trong một ngày.', min: 0 },
   { key: 'settings.refresh_size', label: 'Tin mỗi lần “Cập nhật”', help: 'Số tin bổ sung mỗi lần bấm Cập nhật tin mới.', min: 1 },
   { key: 'settings.daily_cap_refresh', label: 'Lượt “Cập nhật” mỗi ngày', help: 'Số lần được bấm Cập nhật tin mới trong một ngày.', min: 0 },
+  { key: 'settings.daily_cap_assist', label: 'Lượt “AI gợi ý” mỗi ngày', help: 'Số lần được bấm Gợi ý trong popup sửa danh mục; mỗi lần dùng 1 request AI.', min: 0 },
 ];
 const EXCLUDE_HELP = 'Tin có một trong các từ này bị bỏ ngay từ đầu, không xét danh mục nào (trừ nguồn chính thức). Dùng cho tin rác như trang giá, “price today”.';
 
