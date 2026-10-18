@@ -89,7 +89,7 @@ export async function safeEqual(a: string, b: string): Promise<boolean> {
 }
 
 /** Uses one press of an admin button today; 429 when the daily cap is reached. */
-export async function useQuota(db: SupabaseClient, topicId: string, action: 'more' | 'refresh', cap: number, label: string): Promise<void> {
+export async function useQuota(db: SupabaseClient, topicId: string, action: 'more' | 'refresh' | 'assist', cap: number, label: string): Promise<void> {
   const { data, error } = await db.rpc('use_action_quota', { p_topic_id: topicId, p_action: action, p_cap: cap });
   if (error) throw new Error(`use_action_quota: ${error.message}`);
   if (data !== true) throw new HttpError(429, `Đã dùng hết ${cap} lượt "${label}" hôm nay.`);

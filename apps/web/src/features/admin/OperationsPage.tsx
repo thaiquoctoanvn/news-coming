@@ -95,7 +95,7 @@ function QuotaAndSchedule({ topicId }: { topicId: string }) {
     <Card className="gap-3 p-5">
       <Card.Title className="text-base font-semibold">Nút bấm & lịch tự động</Card.Title>
       <p className="text-sm">
-        Hôm nay: Xem thêm <strong>{quota.data?.more ?? 0}</strong> lượt · Cập nhật tin mới <strong>{quota.data?.refresh ?? 0}</strong> lượt
+        Hôm nay: Xem thêm <strong>{quota.data?.more ?? 0}</strong> lượt · Cập nhật tin mới <strong>{quota.data?.refresh ?? 0}</strong> lượt · AI gợi ý <strong>{quota.data?.assist ?? 0}</strong> lượt
       </p>
       <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">pg_cron đã gọi GitHub</h3>
       {dispatches.data?.length ? (

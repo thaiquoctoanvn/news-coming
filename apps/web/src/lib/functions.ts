@@ -44,3 +44,14 @@ export async function requestRefresh(db: SupabaseClient, topicId: string, editio
   const result = await invoke<{ message: string }>(db, 'trigger-refresh', { topicId, editionId });
   return result.message;
 }
+
+export interface CategorySuggestion {
+  readonly keywords: string[];
+  readonly excludeKeywords: string[];
+  readonly description: string;
+}
+
+/** AI suggestions for one category from the admin's notes; nothing is saved by the call. */
+export function requestCategoryAssist(db: SupabaseClient, topicId: string, categoryId: string, brief: string): Promise<CategorySuggestion> {
+  return invoke<CategorySuggestion>(db, 'category-assist', { topicId, categoryId, brief });
+}

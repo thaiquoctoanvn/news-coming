@@ -13,6 +13,9 @@ import type { CalendarEvent, DataModule, MarketPoint, ModuleContext, ModuleStore
 const EVENTS_PAST_DAYS = 3;
 const EVENTS_AHEAD_DAYS = 45;
 const DAY_MS = 86_400_000;
+// Daily closes fetched per run; a module without any data yet gets one year so its chart starts filled.
+const RECENT_RANGE = '10d';
+const BACKFILL_RANGE = '1y';
 
 export interface ModuleResult {
   readonly rows: number;
@@ -48,7 +51,7 @@ async function runConnector(module: DataModule, ctx: ModuleContext): Promise<Con
   const config = module.config as { series?: SeriesMap; fallback?: { series?: SeriesMap }; feeds?: string[] };
   switch (module.connector) {
     case 'yahoo_chart':
-      return withFallback(() => yahoo(config.series ?? {}, ctx), config.fallback?.series, (s) => eia(s, ctx), 'EIA_API_KEY', ctx.eiaApiKey);
+      return withFallback(() => yahoo(config.series ?? {}, ctx, module.hasMarketData === false ? BACKFILL_RANGE : RECENT_RANGE), config.fallback?.series, (s) => eia(s, ctx), 'EIA_API_KEY', ctx.eiaApiKey);
     case 'treasury_yield_curve':
       return withFallback(() => treasuryYields(config.series ?? {}, ctx), config.fallback?.series, (s) => fred(s, ctx), 'FRED_API_KEY', ctx.fredApiKey);
     case 'mof_jgb':
@@ -75,10 +78,10 @@ async function withFallback(
   }
 }
 
-async function yahoo(series: SeriesMap, ctx: ModuleContext): Promise<MarketPoint[]> {
+async function yahoo(series: SeriesMap, ctx: ModuleContext, range: string): Promise<MarketPoint[]> {
   const points: MarketPoint[] = [];
   for (const [name, symbol] of Object.entries(series)) {
-    const json = await ctx.fetchText(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=10d&interval=1d`);
+    const json = await ctx.fetchText(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`);
     points.push(...parseYahooChart(json, name));
   }
   return points;

@@ -22,6 +22,7 @@ const CHARTS = [
   { id: 'us', title: 'Lợi suất trái phiếu Kho bạc Mỹ (%)', source: 'U.S. Treasury' },
   { id: 'jp', title: 'Lợi suất trái phiếu chính phủ Nhật (%)', source: 'Bộ Tài chính Nhật' },
   { id: 'oil', title: 'Giá dầu (USD/thùng)', source: 'Yahoo Finance, EIA' },
+  { id: 'gold', title: 'Giá vàng (USD/ounce)', source: 'Yahoo Finance — hợp đồng tương lai vàng COMEX (GC=F)' },
 ] as const;
 
 export function ChartsPage() {

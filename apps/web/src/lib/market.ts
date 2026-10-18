@@ -6,17 +6,20 @@ export interface SeriesInfo {
   readonly id: string;
   readonly label: string;
   readonly unit: '%' | 'USD';
-  readonly group: 'oil' | 'us' | 'jp';
+  readonly group: 'oil' | 'gold' | 'us' | 'jp';
+  /** A rise in oil or yields puts pressure on markets (shown in red); gold has no fixed reading. */
+  readonly riseIsPressure: boolean;
 }
 
 export const SERIES: readonly SeriesInfo[] = [
-  { id: 'WTI', label: 'Dầu WTI', unit: 'USD', group: 'oil' },
-  { id: 'BRENT', label: 'Dầu Brent', unit: 'USD', group: 'oil' },
-  { id: 'US2Y', label: 'Mỹ 2 năm', unit: '%', group: 'us' },
-  { id: 'US10Y', label: 'Mỹ 10 năm', unit: '%', group: 'us' },
-  { id: 'US30Y', label: 'Mỹ 30 năm', unit: '%', group: 'us' },
-  { id: 'JP10Y', label: 'Nhật 10 năm', unit: '%', group: 'jp' },
-  { id: 'JP30Y', label: 'Nhật 30 năm', unit: '%', group: 'jp' },
+  { id: 'WTI', label: 'Dầu WTI', unit: 'USD', group: 'oil', riseIsPressure: true },
+  { id: 'BRENT', label: 'Dầu Brent', unit: 'USD', group: 'oil', riseIsPressure: true },
+  { id: 'GOLD', label: 'Vàng', unit: 'USD', group: 'gold', riseIsPressure: false },
+  { id: 'US2Y', label: 'Mỹ 2 năm', unit: '%', group: 'us', riseIsPressure: true },
+  { id: 'US10Y', label: 'Mỹ 10 năm', unit: '%', group: 'us', riseIsPressure: true },
+  { id: 'US30Y', label: 'Mỹ 30 năm', unit: '%', group: 'us', riseIsPressure: true },
+  { id: 'JP10Y', label: 'Nhật 10 năm', unit: '%', group: 'jp', riseIsPressure: true },
+  { id: 'JP30Y', label: 'Nhật 30 năm', unit: '%', group: 'jp', riseIsPressure: true },
 ];
 
 export interface LatestValue {

@@ -4,6 +4,7 @@ import { Field, FormDialog } from '../../../components/FormDialog.tsx';
 import { InfoTip } from '../../../components/InfoTip.tsx';
 import { ErrorState, LoadingCards } from '../../../components/States.tsx';
 import { Toggle } from '../../../components/Toggle.tsx';
+import { CategoryAssist } from './CategoryAssist.tsx';
 import { EditButton } from './RowActions.tsx';
 import { Section } from './Section.tsx';
 import { useAdminRows } from './use-admin-rows.ts';
@@ -110,6 +111,15 @@ function CategoryDialog({ category, onSave, onClose }: { category: Category; onS
         <span className="text-muted">Từ khóa ngoại lệ <InfoTip label="Từ khóa ngoại lệ">{HELP.exclude}</InfoTip></span>
         <ChipListEditor label="Từ khóa ngoại lệ" tone="danger" values={exclude} onChange={setExclude} />
       </div>
+      <CategoryAssist
+        topicId={category.topic_id}
+        categoryId={category.id}
+        keywords={keywords}
+        excludeKeywords={exclude}
+        onAddKeywords={(items) => setKeywords((k) => [...new Set([...k, ...items])])}
+        onAddExcludes={(items) => setExclude((k) => [...new Set([...k, ...items])])}
+        onUseDescription={setDescription}
+      />
       <Field label={<>Mô tả cho AI <InfoTip label="Mô tả cho AI">{HELP.description}</InfoTip></>}>
         <textarea
           rows={5}

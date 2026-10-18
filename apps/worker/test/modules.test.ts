@@ -143,6 +143,26 @@ describe('runDataModules', () => {
     expect(results.broken?.error).toBe('Unknown connector "unknown"');
   });
 
+  test('a module without data fetches one year once, then only recent days', async () => {
+    const urls: string[] = [];
+    const yahooJson = JSON.stringify({ chart: { result: [{ meta: { exchangeTimezoneName: 'America/New_York' }, timestamp: [], indicators: { quote: [{ close: [] }] } }] } });
+    const fetchText = async (url: string) => {
+      urls.push(url);
+      return yahooJson;
+    };
+    const storeWith = (hasMarketData: boolean): ModuleStore => ({
+      loadDataModules: async () => [{ id: 'gold_price', connector: 'yahoo_chart', config: { series: { GOLD: 'GC=F' } }, hasMarketData }],
+      upsertMarketData: async () => {},
+      upsertEvents: async () => {},
+    });
+
+    await runDataModules('macro_finance', storeWith(false), context(fetchText));
+    await runDataModules('macro_finance', storeWith(true), context(fetchText));
+
+    expect(urls[0]).toContain('GC%3DF?range=1y&interval=1d');
+    expect(urls[1]).toContain('GC%3DF?range=10d&interval=1d');
+  });
+
   test('without a fallback key the module reports the primary error', async () => {
     const results = await runDataModules('macro_finance', new FakeStore(), context(async () => { throw new Error('HTTP 429'); }));
 
