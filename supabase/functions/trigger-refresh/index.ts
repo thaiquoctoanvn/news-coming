@@ -20,12 +20,14 @@ serve(async (req) => {
   const { data: setting, error } = await db.from('app_settings').select('value').eq('key', 'github_dispatch').maybeSingle();
   if (error || !setting) throw new Error('app_settings.github_dispatch is missing');
   const target = setting.value as { repo: string; workflow: string; ref: string };
+  // Read the token before using a press, so a missing secret does not cost the admin a daily press.
+  const token = requireEnv('GITHUB_DISPATCH_TOKEN');
 
   await useQuota(db, topicId, 'refresh', config.topic.dailyCapRefresh, 'Cập nhật tin mới');
   const response = await fetch(`https://api.github.com/repos/${target.repo}/actions/workflows/${target.workflow}/dispatches`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${requireEnv('GITHUB_DISPATCH_TOKEN')}`,
+      Authorization: `Bearer ${token}`,
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
       'User-Agent': 'news-coming-admin',
