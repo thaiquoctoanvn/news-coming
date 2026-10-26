@@ -58,6 +58,8 @@ async function runConnector(module: DataModule, ctx: ModuleContext): Promise<Con
       return { points: parseJgbCsv(await ctx.fetchText('https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/jgbcme.csv'), config.series ?? {}), warnings: [] };
     case 'macro_calendar':
       return calendar(config.feeds ?? [], ctx);
+    case 'fred_series':
+      return fredSeries(module.config as FredSeriesConfig, ctx);
     default:
       throw new Error(`Unknown connector "${module.connector}"`);
   }
@@ -112,6 +114,48 @@ async function fred(series: SeriesMap, ctx: ModuleContext): Promise<MarketPoint[
     points.push(...parseFredObservations(await ctx.fetchText(url), name));
   }
   return points;
+}
+
+/** One FRED series; `units: "pc1"` asks FRED for the % change from a year ago, `frequency`/`aggregation` resample it. */
+export interface FredSeriesSpec {
+  readonly id: string;
+  readonly units?: string;
+  readonly frequency?: string;
+  readonly aggregation?: string;
+}
+
+interface FredSeriesConfig {
+  readonly series?: Readonly<Record<string, FredSeriesSpec>>;
+  /** History kept for the chart; each run refetches the whole window, so FRED revisions are picked up. */
+  readonly months?: number;
+}
+
+const DEFAULT_FRED_MONTHS = 36;
+
+export function fredObservationsUrl(spec: FredSeriesSpec, apiKey: string, start: string): string {
+  const params = new URLSearchParams({ series_id: spec.id, api_key: apiKey, file_type: 'json', observation_start: start });
+  if (spec.units) params.set('units', spec.units);
+  if (spec.frequency) params.set('frequency', spec.frequency);
+  if (spec.aggregation) params.set('aggregation_method', spec.aggregation);
+  return `https://api.stlouisfed.org/fred/series/observations?${params.toString()}`;
+}
+
+/** Generic FRED connector (monthly macro series). A failing series leaves a warning, the others still update. */
+async function fredSeries(config: FredSeriesConfig, ctx: ModuleContext): Promise<ConnectorOutput> {
+  if (!ctx.fredApiKey) throw new Error('FRED_API_KEY not set');
+  const months = config.months ?? DEFAULT_FRED_MONTHS;
+  const start = `${dateIn(new Date(ctx.now.getTime() - (months + 1) * 31 * DAY_MS), 'America/New_York').slice(0, 7)}-01`;
+  const points: MarketPoint[] = [];
+  const warnings: string[] = [];
+  for (const [name, spec] of Object.entries(config.series ?? {})) {
+    try {
+      points.push(...parseFredObservations(await ctx.fetchText(fredObservationsUrl(spec, ctx.fredApiKey, start)), name));
+    } catch (error: unknown) {
+      warnings.push(`${name}: ${errorMessage(error)}`);
+    }
+  }
+  if (points.length === 0 && warnings.length > 0) throw new Error(warnings.join(' | '));
+  return { points, warnings };
 }
 
 /** Each feed is independent: one failing source leaves a warning, the others still update. */

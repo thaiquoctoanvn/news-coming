@@ -271,6 +271,7 @@ Code: `apps/worker/src/modules/`. Yahoo lấy 10 ngày gần nhất mỗi lần;
 | `jp_yields` | số liệu | MOF Japan `jgbcme.csv` | trễ 1 ngày làm việc |
 | `oil_price` | số liệu | Yahoo chart `CL=F`, `BZ=F` (gần realtime, **không chính thức**) → dự phòng EIA API v2 (`RWTC`, `RBRTE`) nếu có `EIA_API_KEY` | EIA key free, trễ ~1 ngày |
 | `gold_price` | số liệu | Yahoo chart `GC=F` (vàng COMEX kỳ hạn gần nhất, USD/ounce, **không chính thức**); không có nguồn dự phòng miễn phí | Thêm 2026-10-18 |
+| `us_macro` | số liệu tháng | Connector chung `fred_series` (danh sách chuỗi trong `config.series`, sửa không cần code): `DFEDTARL`/`DFEDTARU` (khoảng lãi suất mục tiêu FED, giá trị cuối tháng), `CPIAUCSL`, `PCEPI`, `PPIFIS` với `units=pc1` (% so với cùng kỳ, FRED tự tính), `UNRATE`. Mỗi lần chạy lấy lại 36 tháng để nhận số liệu FRED điều chỉnh | Cần `FRED_API_KEY`; ~6 request/lần. Chỉ hiển thị ở trang Biểu đồ |
 | `macro_calendar` | lịch | FOMC (HTML `fomccalendars.htm`, 14:00 ET ngày cuối), BOJ (bảng lịch họp, ~12:00 Tokyo ngày cuối), đấu giá TPCP Mỹ 2–30 năm (FiscalData `upcoming_auctions`), CPI/NFP/PCE/PPI/GDP/JOLTS qua **FRED release calendar** (bls.gov chặn truy cập tự động; cần `FRED_API_KEY`) | Tên tiếng Việt từ bảng cố định trong code, không dùng AI. Lưu sự kiện từ 3 ngày trước tới 45 ngày tới |
 
 ---
@@ -407,7 +408,7 @@ Code: `apps/web` (Vite 8 + React 19 + HeroUI v3 + Tailwind v4 + TanStack Query +
 |---|---|
 | `/t/:topicId` | Bản tin: dải số liệu (dầu, lợi suất Mỹ/Nhật, thay đổi so phiên trước), chọn ngày (‹ ›) và edition (tabs), sự kiện quan trọng sắp tới, mọi tin trong một lưới so le (1–3 cột, tin ghim trước rồi theo `position`). Card: Tin nóng, danh mục, mức tác động, chiều tác động, tiêu đề, nguồn/giờ/phút đọc, đoạn đầu; "Xem thêm" mở popup đọc đầy đủ; "Đọc bài gốc". URL giữ trạng thái `?date=&edition=` |
 | `/t/:topicId/lich` | Lịch sự kiện theo ngày giờ VN, lọc "Rất quan trọng"/"Tất cả", ghi nguồn (FRED…) |
-| `/t/:topicId/bieu-do` | Biểu đồ lợi suất Mỹ, Nhật, giá dầu (1/3/12 tháng), tải lười để không làm nặng trang chính |
+| `/t/:topicId/bieu-do` | Biểu đồ "Lãi suất FED & kinh tế Mỹ" (3 năm cố định: dải lãi suất mục tiêu + CPI/PCE/PPI/thất nghiệp, dòng số kỳ gần nhất ghi rõ tháng); lợi suất Mỹ, Nhật, giá dầu, vàng (1/3/12 tháng). Số liệu đọc theo trang 1000 dòng (giới hạn của Supabase). Tải lười để không làm nặng trang chính |
 
 - Font tự host (Be Vietnam Pro + Noto Serif, có tiếng Việt) → CSP không cần domain ngoài. `public/_headers`: CSP (`connect-src https://*.supabase.co`; `style-src 'unsafe-inline'` vì HeroUI/Recharts dùng inline style), HSTS, `X-Frame-Options: DENY`… `public/_redirects` cho SPA.
 - Nền sáng/tối theo hệ thống, nút chuyển lưu ở `localStorage` (chỉ là tiện ích, lỗi storage không ảnh hưởng).

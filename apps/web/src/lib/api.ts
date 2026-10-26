@@ -69,14 +69,40 @@ export async function fetchCategories(db: SupabaseClient, topicId: string): Prom
   return new Map((rows as { id: string; name_vi: string }[]).map((r) => [r.id, r.name_vi]));
 }
 
-export async function fetchMarketData(db: SupabaseClient, topicId: string, days: number, now = Date.now()): Promise<MarketPoint[]> {
-  const since = new Date(now - days * DAY_MS).toISOString().slice(0, 10);
+// Supabase returns at most 1000 rows per request; a year of 8 daily series is ~2000, so read in pages.
+const PAGE_SIZE = 1000;
+
+async function fetchMarketRows(db: SupabaseClient, topicId: string, since: string, seriesIds?: readonly string[]): Promise<MarketPoint[]> {
+  const rows: { series: string; obs_date: string; value: number | string }[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    let request = db.from('market_data').select('series, obs_date, value').eq('topic_id', topicId).gte('obs_date', since);
+    if (seriesIds) request = request.in('series', [...seriesIds]);
+    const page = check(await request.order('obs_date').order('series').range(from, from + PAGE_SIZE - 1), 'market data') as typeof rows;
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+  return rows.map((r) => ({ series: r.series, date: r.obs_date, value: Number(r.value) }));
+}
+
+export function fetchMarketData(db: SupabaseClient, topicId: string, days: number, now = Date.now()): Promise<MarketPoint[]> {
+  return fetchMarketRows(db, topicId, new Date(now - days * DAY_MS).toISOString().slice(0, 10));
+}
+
+/** Only the given series (monthly macro data) over the last `months` months. */
+export function fetchMarketSeries(db: SupabaseClient, topicId: string, seriesIds: readonly string[], months: number, now = Date.now()): Promise<MarketPoint[]> {
+  const since = new Date(now - (months + 1) * 31 * DAY_MS).toISOString().slice(0, 7);
+  return fetchMarketRows(db, topicId, `${since}-01`, seriesIds);
+}
+
+/** Days (YYYY-MM-DD) that have a digest in the last year, newest first — for the date picker. */
+export async function fetchDigestDates(db: SupabaseClient, topicId: string, now = Date.now()): Promise<string[]> {
+  const since = new Date(now - 366 * DAY_MS).toISOString().slice(0, 10);
   const rows = check(
-    await db.from('market_data').select('series, obs_date, value').eq('topic_id', topicId).gte('obs_date', since).order('obs_date'),
-    'market data',
-  );
-  return (rows as { series: string; obs_date: string; value: number | string }[])
-    .map((r) => ({ series: r.series, date: r.obs_date, value: Number(r.value) }));
+    await db.from('digests').select('digest_date').eq('topic_id', topicId).gte('digest_date', since)
+      .order('digest_date', { ascending: false }).limit(PAGE_SIZE),
+    'digest dates',
+  ) as { digest_date: string }[];
+  return [...new Set(rows.map((r) => r.digest_date))];
 }
 
 export async function fetchEvents(db: SupabaseClient, topicId: string, now = Date.now()): Promise<CalendarEvent[]> {

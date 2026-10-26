@@ -3,7 +3,7 @@ import {
   FRED_RELEASES, parseBojSchedule, parseFomcCalendar, parseFredReleaseDates, parseUpcomingAuctions,
 } from '../src/modules/calendar.ts';
 import { parseFredObservations, parseJgbCsv, parseTreasuryYieldXml, parseYahooChart } from '../src/modules/market.ts';
-import { runDataModules } from '../src/modules/run-modules.ts';
+import { fredObservationsUrl, runDataModules } from '../src/modules/run-modules.ts';
 import { dateIn, zonedTime } from '../src/modules/time.ts';
 import type { CalendarEvent, MarketPoint, ModuleContext, ModuleStore } from '../src/modules/types.ts';
 
@@ -167,5 +167,48 @@ describe('runDataModules', () => {
     const results = await runDataModules('macro_finance', new FakeStore(), context(async () => { throw new Error('HTTP 429'); }));
 
     expect(results.oil_price?.error).toBe('HTTP 429; no fallback (EIA_API_KEY not set)');
+  });
+});
+
+describe('FRED macro series (us_macro)', () => {
+  test('builds observation URLs with units and monthly resampling', () => {
+    const url = new URL(fredObservationsUrl({ id: 'DFEDTARU', frequency: 'm', aggregation: 'eop' }, 'k', '2023-09-01'));
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      series_id: 'DFEDTARU', api_key: 'k', file_type: 'json', observation_start: '2023-09-01', frequency: 'm', aggregation_method: 'eop',
+    });
+    expect(new URL(fredObservationsUrl({ id: 'CPIAUCSL', units: 'pc1' }, 'k', '2023-09-01')).searchParams.get('units')).toBe('pc1');
+  });
+
+  test('stores every series it can read and reports the others as warnings', async () => {
+    const points: MarketPoint[] = [];
+    const store: ModuleStore = {
+      loadDataModules: async () => [{
+        id: 'us_macro', connector: 'fred_series', hasMarketData: true,
+        config: { months: 36, series: { US_CPI_YOY: { id: 'CPIAUCSL', units: 'pc1' }, US_UNRATE: { id: 'UNRATE' } } },
+      }],
+      upsertMarketData: async (_t, _m, p) => { points.push(...p); },
+      upsertEvents: async () => {},
+    };
+    const fetchText = async (url: string): Promise<string> => {
+      if (url.includes('UNRATE')) throw new Error('HTTP 500');
+      expect(new URL(url).searchParams.get('observation_start')).toBe('2023-09-01');
+      return JSON.stringify({ observations: [{ date: '2026-09-01', value: '3.7' }, { date: '2026-08-01', value: '.' }] });
+    };
+
+    const results = await runDataModules('macro_finance', store, { fetchText, fredApiKey: 'k', eiaApiKey: undefined, now: new Date('2026-10-26T00:00:00Z') });
+
+    expect(points).toEqual([{ series: 'US_CPI_YOY', obsDate: '2026-09-01', value: 3.7, source: 'fred' }]);
+    expect(results.us_macro).toMatchObject({ rows: 1, error: null, warnings: ['US_UNRATE: HTTP 500'] });
+  });
+
+  test('needs the FRED key', async () => {
+    const store: ModuleStore = {
+      loadDataModules: async () => [{ id: 'us_macro', connector: 'fred_series', hasMarketData: true, config: { series: {} } }],
+      upsertMarketData: async () => {},
+      upsertEvents: async () => {},
+    };
+    const results = await runDataModules('macro_finance', store, { fetchText: async () => '', fredApiKey: undefined, eiaApiKey: undefined, now: new Date() });
+
+    expect(results.us_macro?.error).toBe('FRED_API_KEY not set');
   });
 });

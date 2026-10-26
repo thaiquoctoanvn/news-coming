@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import {
-  fetchCategories, fetchDigestArticles, fetchDigests, fetchEditions, fetchEvents, fetchMarketData, fetchTopics,
+  fetchCategories, fetchDigestArticles, fetchDigestDates, fetchDigests, fetchEditions, fetchEvents, fetchMarketData,
+  fetchMarketSeries, fetchTopics,
 } from './api.ts';
 import { useSupabase } from './supabase.ts';
 
@@ -43,6 +44,20 @@ export function useCategories(topicId: string) {
 export function useMarketData(topicId: string, days: number) {
   const db = useSupabase();
   return useQuery({ queryKey: ['market', topicId, days], queryFn: () => fetchMarketData(db, topicId, days), staleTime: FIVE_MINUTES });
+}
+
+export function useMarketSeries(topicId: string, seriesIds: readonly string[], months: number) {
+  const db = useSupabase();
+  return useQuery({
+    queryKey: ['market-series', topicId, seriesIds.join(','), months],
+    queryFn: () => fetchMarketSeries(db, topicId, seriesIds, months),
+    staleTime: ONE_HOUR,
+  });
+}
+
+export function useDigestDates(topicId: string) {
+  const db = useSupabase();
+  return useQuery({ queryKey: ['digest-dates', topicId], queryFn: () => fetchDigestDates(db, topicId), staleTime: FIVE_MINUTES });
 }
 
 export function useEvents(topicId: string) {

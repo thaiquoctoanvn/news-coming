@@ -25,9 +25,9 @@ Không cần đăng nhập.
 
 | Trang | Có gì |
 |---|---|
-| **Bản tin** | Dải số liệu thị trường (dầu WTI/Brent, vàng, lợi suất Mỹ 2/10/30 năm, Nhật 10/30 năm, thay đổi so phiên trước). Nút ‹ › để đổi ngày, tab để chọn **Bản tin sáng** hoặc **Trước phiên Mỹ**. Sự kiện quan trọng sắp tới. Các tin xếp dạng lưới so le, tin quan trọng nhất ở hàng đầu. |
+| **Bản tin** | Dải số liệu thị trường (dầu WTI/Brent, vàng, lợi suất Mỹ 2/10/30 năm, Nhật 10/30 năm, thay đổi so phiên trước). Nút ‹ › để đổi ngày, hoặc bấm vào dòng ngày để mở **lịch chọn ngày** (chỉ chọn được ngày có bản tin), tab để chọn **Bản tin sáng** hoặc **Trước phiên Mỹ**. Sự kiện quan trọng sắp tới. Các tin xếp dạng lưới so le, tin quan trọng nhất ở hàng đầu. |
 | **Lịch sự kiện** | FOMC, BOJ, CPI, NFP, PCE, PPI, GDP, JOLTS, đấu giá trái phiếu Mỹ — giờ Việt Nam, lọc "Rất quan trọng" hoặc "Tất cả". |
-| **Biểu đồ** | Lợi suất Mỹ, lợi suất Nhật, giá dầu, giá vàng — chọn 1 tháng / 3 tháng / 1 năm. |
+| **Biểu đồ** | **Lãi suất FED & kinh tế Mỹ** (3 năm, theo tháng): khoảng lãi suất mục tiêu FED, lạm phát CPI, PCE, PPI (so với cùng kỳ), tỷ lệ thất nghiệp, kèm số kỳ gần nhất. Lợi suất Mỹ, lợi suất Nhật, giá dầu, giá vàng — chọn 1 tháng / 3 tháng / 1 năm. |
 
 Mỗi thẻ tin có: nhãn **Tin nóng** (nếu được ghim), danh mục, mức tác động, chiều tác động (tiêu cực / trung lập / tích cực), tiêu đề, nguồn, giờ đăng và đoạn đầu tóm tắt.
 
@@ -75,7 +75,7 @@ Mọi mục hiển thị **chỉ đọc**. Chỉ **công tắc Bật/Tắt** có
 | **Thứ tự ưu tiên** | Các nhóm tin được lấp từ trên xuống. Kéo **⠿** để đổi thứ tự; ✏️ / **Thêm nhóm** để chọn danh mục (dropdown), cách lấy tin, **Tối đa**, **Điểm sàn**, **Sàn tin 2+**; 🗑️ để xóa. |
 | **Danh mục** | Từ khóa nhận diện, từ khóa ngoại lệ, mô tả cho AI. Tên và mã danh mục cố định. Có **AI gợi ý** (xem 2.5). |
 | **Nguồn tin** | Thêm / sửa / xóa nguồn RSS hoặc Google News: URL hoặc truy vấn, danh mục mặc định (dropdown), điểm uy tín (≥ 10 = nguồn chính thức, luôn qua bước lọc). Cột cuối hiện lỗi gần nhất. |
-| **Số liệu & lịch** | Bật/tắt và đổi tên các module: giá dầu, giá vàng, lợi suất Mỹ, lợi suất Nhật, lịch sự kiện vĩ mô. Tắt module thì dữ liệu cũ vẫn giữ. |
+| **Số liệu & lịch** | Bật/tắt và đổi tên các module: giá dầu, giá vàng, lợi suất Mỹ, lợi suất Nhật, lãi suất FED & kinh tế Mỹ, lịch sự kiện vĩ mô. Tắt module thì dữ liệu cũ vẫn giữ. |
 
 **Cách hệ thống dùng từ khóa** (tiếng Anh, vì tin gốc là tiếng Anh):
 
