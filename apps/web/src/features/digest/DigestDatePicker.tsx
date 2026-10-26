@@ -1,6 +1,6 @@
 import { Calendar, DatePicker } from '@heroui/react';
 import { type CalendarDate, parseDate, today } from '@internationalized/date';
-import { I18nProvider } from 'react-aria-components';
+import { Group, I18nProvider } from 'react-aria-components';
 import { VIETNAM_TZ } from '../../lib/format.ts';
 
 type Props = {
@@ -33,13 +33,16 @@ export function DigestDatePicker({ date, availableDates, label, onSelect }: Prop
         className="min-w-0"
       >
         <h1 className="min-w-0">
-          <DatePicker.Trigger
-            aria-label={`Chọn ngày bản tin, đang xem ${label}`}
-            className="flex min-w-0 items-center gap-2 rounded-lg px-1 font-serif text-2xl font-bold hover:bg-surface focus-visible:outline-2 focus-visible:outline-focus"
-          >
-            <span className="truncate">{label}</span>
-            <DatePicker.TriggerIndicator className="shrink-0 text-base text-muted" />
-          </DatePicker.Trigger>
+          {/* The calendar popover is positioned against this group; without it the popover never shows. */}
+          <Group className="inline-flex min-w-0 max-w-full">
+            <DatePicker.Trigger
+              aria-label={`Chọn ngày bản tin, đang xem ${label}`}
+              className="flex min-w-0 items-center gap-2 rounded-lg px-1 font-serif text-2xl font-bold hover:bg-surface focus-visible:outline-2 focus-visible:outline-focus"
+            >
+              <span className="truncate">{label}</span>
+              <DatePicker.TriggerIndicator className="shrink-0 text-base text-muted" />
+            </DatePicker.Trigger>
+          </Group>
         </h1>
         <DatePicker.Popover>
           <Calendar aria-label="Lịch bản tin">

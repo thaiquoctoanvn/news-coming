@@ -16,7 +16,11 @@ describe('DigestDatePicker', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /16\/10\/2026/ }));
+    const trigger = screen.getByRole('button', { name: /16\/10\/2026/ });
+    // The popover anchors to the picker's group; without one it never gets a position and stays hidden.
+    expect(screen.getByRole('group')).toContainElement(trigger);
+
+    await user.click(trigger);
     const grid = await screen.findByRole('grid');
     const day = (n: number) => within(grid).getAllByRole('button').find((b) => b.textContent?.trim() === String(n));
 
