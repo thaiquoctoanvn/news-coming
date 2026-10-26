@@ -108,6 +108,22 @@ Migration `20261016000100_scheduler.sql`.
 3. Kiểm tra: `select jobname, schedule from cron.job;` — sau giờ chạy: `select * from schedule_dispatches order by dispatched_at desc;` và `select status_code, content from net._http_response order by created desc limit 5;` (mong đợi 204).
 4. Token hết hạn → tạo token mới, `select vault.update_secret((select id from vault.secrets where name = 'github_dispatch_token'), '<token mới>');`
 
+### 3.1a Dọn dữ liệu cũ
+
+Migration `20261026000200_retention.sql`. `public.purge_old_data()` chạy bởi **pg_cron lúc 20:00 UTC (03:00 VN)** mỗi ngày, xa giờ các bản tin; admin bấm **Dọn ngay** trên trang Vận hành gọi `purge_old_data_now()` (kiểm tra `is_admin()`).
+
+| Dữ liệu | Giữ | Cấu hình (`topics.settings`) |
+|---|---|---|
+| Bản tin + tin trong bản tin | 365 ngày (tối thiểu 7) | `retention_digest_days` |
+| Tin không vào bản tin nào (raw, lọc, trùng, chấm điểm, lỗi) | 7 ngày (tối thiểu 3) | `retention_unpublished_days` |
+| Chữ bài gốc (`content_snippet`) — giữ tóm tắt và link | 30 ngày (tối thiểu 7) | `retention_snippet_days` |
+| `crawl_runs`, `ai_usage`, `action_quota`, `schedule_dispatches` | 90 ngày | cố định |
+| `login_attempts` | 7 ngày | cố định |
+| `events` đã qua | 30 ngày | cố định |
+| `market_data` | không xóa (nhỏ, cần cho biểu đồ) | — |
+
+Không bao giờ xóa tin đang `selected`/`summarized` (đang xử lý dở). Mỗi bước xóa tối đa 20.000 dòng/lần. Kết quả lần dọn gần nhất lưu ở `app_settings.last_purge`; trang Vận hành hiện kết quả này và dung lượng DB (`database_size_mb()`, admin) so với 500 MB.
+
 ### 3.2 Ba loại dữ liệu trong một topic
 
 | Loại | Bảng | AI? |
@@ -271,6 +287,7 @@ Code: `apps/worker/src/modules/`. Yahoo lấy 10 ngày gần nhất mỗi lần;
 | `jp_yields` | số liệu | MOF Japan `jgbcme.csv` | trễ 1 ngày làm việc |
 | `oil_price` | số liệu | Yahoo chart `CL=F`, `BZ=F` (gần realtime, **không chính thức**) → dự phòng EIA API v2 (`RWTC`, `RBRTE`) nếu có `EIA_API_KEY` | EIA key free, trễ ~1 ngày |
 | `gold_price` | số liệu | Yahoo chart `GC=F` (vàng COMEX kỳ hạn gần nhất, USD/ounce, **không chính thức**); không có nguồn dự phòng miễn phí | Thêm 2026-10-18 |
+| `us_macro` | số liệu tháng | Connector chung `fred_series` (danh sách chuỗi trong `config.series`, sửa không cần code): `DFEDTARL`/`DFEDTARU` (khoảng lãi suất mục tiêu FED, giá trị cuối tháng), `CPIAUCSL`, `PCEPI`, `PPIFIS` với `units=pc1` (% so với cùng kỳ, FRED tự tính), `UNRATE`. Mỗi lần chạy lấy lại 36 tháng để nhận số liệu FRED điều chỉnh | Cần `FRED_API_KEY`; ~6 request/lần. Chỉ hiển thị ở trang Biểu đồ |
 | `macro_calendar` | lịch | FOMC (HTML `fomccalendars.htm`, 14:00 ET ngày cuối), BOJ (bảng lịch họp, ~12:00 Tokyo ngày cuối), đấu giá TPCP Mỹ 2–30 năm (FiscalData `upcoming_auctions`), CPI/NFP/PCE/PPI/GDP/JOLTS qua **FRED release calendar** (bls.gov chặn truy cập tự động; cần `FRED_API_KEY`) | Tên tiếng Việt từ bảng cố định trong code, không dùng AI. Lưu sự kiện từ 3 ngày trước tới 45 ngày tới |
 
 ---
@@ -407,7 +424,7 @@ Code: `apps/web` (Vite 8 + React 19 + HeroUI v3 + Tailwind v4 + TanStack Query +
 |---|---|
 | `/t/:topicId` | Bản tin: dải số liệu (dầu, lợi suất Mỹ/Nhật, thay đổi so phiên trước), chọn ngày (‹ ›) và edition (tabs), sự kiện quan trọng sắp tới, mọi tin trong một lưới so le (1–3 cột, tin ghim trước rồi theo `position`). Card: Tin nóng, danh mục, mức tác động, chiều tác động, tiêu đề, nguồn/giờ/phút đọc, đoạn đầu; "Xem thêm" mở popup đọc đầy đủ; "Đọc bài gốc". URL giữ trạng thái `?date=&edition=` |
 | `/t/:topicId/lich` | Lịch sự kiện theo ngày giờ VN, lọc "Rất quan trọng"/"Tất cả", ghi nguồn (FRED…) |
-| `/t/:topicId/bieu-do` | Biểu đồ lợi suất Mỹ, Nhật, giá dầu (1/3/12 tháng), tải lười để không làm nặng trang chính |
+| `/t/:topicId/bieu-do` | Biểu đồ "Lãi suất FED & kinh tế Mỹ" (3 năm cố định: dải lãi suất mục tiêu + CPI/PCE/PPI/thất nghiệp, dòng số kỳ gần nhất ghi rõ tháng); lợi suất Mỹ, Nhật, giá dầu, vàng (1/3/12 tháng). Số liệu đọc theo trang 1000 dòng (giới hạn của Supabase). Tải lười để không làm nặng trang chính |
 
 - Font tự host (Be Vietnam Pro + Noto Serif, có tiếng Việt) → CSP không cần domain ngoài. `public/_headers`: CSP (`connect-src https://*.supabase.co`; `style-src 'unsafe-inline'` vì HeroUI/Recharts dùng inline style), HSTS, `X-Frame-Options: DENY`… `public/_redirects` cho SPA.
 - Nền sáng/tối theo hệ thống, nút chuyển lưu ở `localStorage` (chỉ là tiện ích, lỗi storage không ảnh hưởng).
@@ -420,8 +437,8 @@ Code: `apps/web` (Vite 8 + React 19 + HeroUI v3 + Tailwind v4 + TanStack Query +
 | Route | Nội dung |
 |---|---|
 | `/dang-nhap` | Username → mã 6 số (InputOTP) |
-| `/quan-tri?topic=` | Vận hành: nút Cập nhật tin mới theo edition, lượng dùng AI hôm nay so hạn mức, lượt bấm đã dùng, lần pg_cron gọi GitHub, bảng Model AI (bật/tắt, ưu tiên, hạn mức), 15 lần chạy gần nhất (chấm/chọn/dịch/bỏ/loại, lỗi), nguồn đang lỗi |
-| `/quan-tri/cau-hinh?topic=` | Cài đặt chung (hạn mức AI, độ dài tóm tắt, giới hạn nút, từ khóa bỏ hẳn tin dạng chip); Bản tin (card: tên cố định, múi giờ dạng `UTC+7 · Giờ Việt Nam`, chọn giờ, chọn thứ, số tin); Thứ tự ưu tiên (danh sách chỉ đọc, kéo thả sắp xếp, thêm/sửa trong popup, chỉ theo danh mục, tooltip giải thích điểm); Danh mục (tên + mã chỉ đọc, từ khóa nhận diện / ngoại lệ dạng chip, mô tả cho AI sửa qua nút bút chì); Nguồn tin; Số liệu & lịch. Mọi mục (kể cả Cài đặt chung, card Bản tin, Danh mục) hiển thị chỉ đọc, chỉ công tắc bật/tắt bấm tại chỗ; nút bút chì / Thêm mở popup có Hủy / OK, chỉ lưu khi bấm OK; mọi chỗ chọn danh mục là dropdown từ danh sách danh mục. Không còn bảng Chủ đề và Tổ chức. Model AI nằm ở trang Vận hành |
+| `/quan-tri?topic=` | Vận hành: nút Cập nhật tin mới theo edition, lượng dùng AI hôm nay so hạn mức, lượt bấm đã dùng, lần pg_cron gọi GitHub, bảng Model AI (bật/tắt, ưu tiên, hạn mức), Dọn dữ liệu cũ (dung lượng DB, lần dọn gần nhất, nút Dọn ngay có xác nhận), 15 lần chạy gần nhất (chấm/chọn/dịch/bỏ/loại, lỗi), nguồn đang lỗi |
+| `/quan-tri/cau-hinh?topic=` | Cài đặt chung (hạn mức AI, độ dài tóm tắt, giới hạn nút, số ngày giữ dữ liệu, từ khóa bỏ hẳn tin dạng chip); Bản tin (card: tên cố định, múi giờ dạng `UTC+7 · Giờ Việt Nam`, chọn giờ, chọn thứ, số tin); Thứ tự ưu tiên (danh sách chỉ đọc, kéo thả sắp xếp, thêm/sửa trong popup, chỉ theo danh mục, tooltip giải thích điểm); Danh mục (tên + mã chỉ đọc, từ khóa nhận diện / ngoại lệ dạng chip, mô tả cho AI sửa qua nút bút chì); Nguồn tin; Số liệu & lịch. Mọi mục (kể cả Cài đặt chung, card Bản tin, Danh mục) hiển thị chỉ đọc, chỉ công tắc bật/tắt bấm tại chỗ; nút bút chì / Thêm mở popup có Hủy / OK, chỉ lưu khi bấm OK; mọi chỗ chọn danh mục là dropdown từ danh sách danh mục. Không còn bảng Chủ đề và Tổ chức. Model AI nằm ở trang Vận hành |
 
 Admin đăng nhập thấy thêm link "Quản trị" ở header và nút "Xem thêm tin" cuối mỗi bản tin. Mọi thao tác ghi đều chạy với quyền admin nên RLS vẫn chặn khi phiên quá 15 ngày.
 
@@ -571,7 +588,7 @@ Secret runtime của Edge Functions (`ADMIN_EMAIL`, API key AI…) đặt một 
 | Nguồn đổi định dạng / chặn | `sources.last_error`, cảnh báo trên trang Vận hành; Google News làm lưới an toàn |
 | Giá dầu từ nguồn không chính thức hỏng | Fallback EIA (trễ 1 ngày) |
 | pg_cron / GitHub dispatch lỗi | Schedule GitHub dự phòng 1 lần/ngày chạy bù edition bị lỡ |
-| Supabase pause / chạm 500MB | Job ghi hằng ngày; cleanup theo `retention` của từng topic |
+| Supabase pause / chạm 500MB | Job ghi hằng ngày; pg_cron dọn dữ liệu cũ lúc 03:00 VN theo số ngày giữ của từng topic (§3.1a); trang Vận hành hiện dung lượng DB |
 | AI chấm điểm sai | `ai_reason` hiển thị cho admin; điểm cuối có thành phần tất định |
 | Bot đốt quota qua nút bấm | Nút chỉ cho admin + giới hạn lượt/ngày theo topic |
 | Deploy lỗi giữa chừng / migration hỏng | Thứ tự DB → Functions → Web → Worker; worker chạy theo tag `prod`; CI chạy migration trên Postgres local trước |

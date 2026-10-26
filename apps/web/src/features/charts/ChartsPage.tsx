@@ -6,6 +6,7 @@ import { EmptyState, ErrorState, LoadingCards } from '../../components/States.ts
 import { formatNumber, formatShortDate } from '../../lib/format.ts';
 import { SERIES, chartRows } from '../../lib/market.ts';
 import { useMarketData } from '../../lib/queries.ts';
+import { MacroChart } from './MacroChart.tsx';
 
 // Loaded lazily (route-level import) so Recharts does not weigh on the digest page.
 
@@ -37,6 +38,8 @@ export function ChartsPage() {
         <h1 className="font-serif text-2xl font-bold">Biểu đồ</h1>
         <SegmentedTabs ariaLabel="Khoảng thời gian" items={RANGES} selectedKey={range.id} onChange={(id) => setParams({ range: id })} />
       </div>
+
+      <MacroChart topicId={topicId} />
 
       {market.isPending && <LoadingCards count={3} />}
       {market.isError && <ErrorState title="Không tải được số liệu" error={market.error} onRetry={() => void market.refetch()} />}

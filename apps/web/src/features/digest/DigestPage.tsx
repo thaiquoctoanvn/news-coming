@@ -5,8 +5,9 @@ import { SegmentedTabs } from '../../components/SegmentedTabs.tsx';
 import { EmptyState, ErrorState, LoadingCards } from '../../components/States.tsx';
 import { chooseDigest, orderArticles } from '../../lib/digest.ts';
 import { formatDigestDate } from '../../lib/format.ts';
-import { useCategories, useDigestArticles, useDigests, useEditions } from '../../lib/queries.ts';
+import { useCategories, useDigestArticles, useDigestDates, useDigests, useEditions } from '../../lib/queries.ts';
 import { AdminDigestActions } from './AdminDigestActions.tsx';
+import { DigestDatePicker } from './DigestDatePicker.tsx';
 import { DigestItemCard, estimateCardHeight } from './DigestItemCard.tsx';
 import { MarketStrip } from './MarketStrip.tsx';
 import { UpcomingEvents } from './UpcomingEvents.tsx';
@@ -16,6 +17,7 @@ export function DigestPage() {
   const [params, setParams] = useSearchParams();
   const digests = useDigests(topicId);
   const editions = useEditions(topicId);
+  const digestDates = useDigestDates(topicId);
   const choice = chooseDigest(digests.data ?? [], params.get('date'), params.get('edition'));
 
   const select = (date: string, edition?: string) => {
@@ -34,7 +36,12 @@ export function DigestPage() {
           <Button isIconOnly size="sm" variant="ghost" aria-label="Ngày trước" isDisabled={!older} onPress={() => older && select(older)}>
             ‹
           </Button>
-          <h1 className="min-w-0 truncate font-serif text-2xl font-bold">{choice.date ? formatDigestDate(choice.date) : 'Bản tin'}</h1>
+          <DigestDatePicker
+            date={choice.date}
+            availableDates={digestDates.data ?? choice.dates}
+            label={choice.date ? formatDigestDate(choice.date) : 'Bản tin'}
+            onSelect={(date) => select(date)}
+          />
           <Button isIconOnly size="sm" variant="ghost" aria-label="Ngày sau" isDisabled={!newer} onPress={() => newer && select(newer)}>
             ›
           </Button>

@@ -1,7 +1,7 @@
 -- RLS / grants contract (docs/DESIGN.md §10.1). Run with: supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(27);
 
 -- ===== Public visitor =====
 set local role anon;
@@ -102,6 +102,28 @@ select isnt_empty(
   'admin can update config'
 );
 select throws_ok($$ select * from public.login_attempts $$, '42501', null, 'admin cannot read login attempts');
+select lives_ok($$ select public.purge_old_data_now() $$, 'admin can run "Dọn ngay"');
+select ok((select public.database_size_mb()) > 0, 'admin sees the database size');
+
+-- ===== Retention =====
+reset role;
+insert into public.articles (id, topic_id, source_name, url_hash, url, title, status, fetched_at, content_snippet) values
+  ('00000000-0000-0000-0000-0000000000b1', 'macro_finance', 'x', 'rt1', 'https://x/1', 'old filtered', 'filtered_out', now() - interval '10 days', 'text'),
+  ('00000000-0000-0000-0000-0000000000b2', 'macro_finance', 'x', 'rt2', 'https://x/2', 'old selected', 'selected', now() - interval '40 days', 'text'),
+  ('00000000-0000-0000-0000-0000000000b3', 'macro_finance', 'x', 'rt3', 'https://x/3', 'fresh raw', 'raw', now(), 'text');
+select public.purge_old_data();
+select results_eq(
+  $$ select title, content_snippet is not null from public.articles where url_hash like 'rt%' order by title $$,
+  $$ values ('fresh raw'::text, true), ('old selected', true) $$,
+  'purge removes old unpublished articles and never touches work in progress'
+);
+
+set local role anon;
+select throws_ok($$ select public.purge_old_data_now() $$, '42501', null, 'anon cannot purge');
+reset role;
+update auth.users set last_sign_in_at = now() - interval '20 days' where id = '00000000-0000-0000-0000-0000000000a1';
+set local role authenticated;
+select throws_ok($$ select public.purge_old_data_now() $$, '42501', null, 'expired admin cannot purge');
 
 select * from finish();
 rollback;
