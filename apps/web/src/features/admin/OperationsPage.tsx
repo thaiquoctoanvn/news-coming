@@ -10,6 +10,7 @@ import { useEditions } from '../../lib/queries.ts';
 import { useSupabase } from '../../lib/supabase.ts';
 import { AI_TABLE } from './config-tables.ts';
 import { EditableTable } from './EditableTable.tsx';
+import { Maintenance } from './Maintenance.tsx';
 
 const STATUS_COLOR: Readonly<Record<string, 'success' | 'warning' | 'danger' | 'default'>> = {
   success: 'success', partial: 'warning', failed: 'danger', running: 'default',
@@ -27,6 +28,7 @@ export function OperationsPage() {
         <QuotaAndSchedule topicId={topicId} />
       </div>
       <EditableTable def={AI_TABLE} topicId={topicId} />
+      <Maintenance />
       <Runs topicId={topicId} />
       <SourceErrors topicId={topicId} />
     </div>

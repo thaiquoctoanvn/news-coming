@@ -60,6 +60,7 @@ Cuối trang có nút **Xem thêm tin**: thêm khoảng 4 tin nữa vào bản t
 | **Cập nhật tin mới** | Lấy tin phát sinh sau lần chạy gần nhất và bổ sung vào bản tin hôm nay (chạy trên GitHub Actions, 5–15 phút). Chọn bản tin cần cập nhật. |
 | **AI hôm nay** | Số request / token đã dùng của từng model so với hạn mức miễn phí. Router tự chuyển model khi chạm 80%. |
 | **Nút bấm & lịch tự động** | Số lượt đã bấm hôm nay (Xem thêm, Cập nhật tin mới, AI gợi ý) và các lần pg_cron đã gọi GitHub để chạy bản tin. |
+| **Dọn dữ liệu cũ** | Dung lượng database so với 500 MB miễn phí, kết quả lần dọn gần nhất và nút **Dọn ngay** (hỏi xác nhận trước khi xóa). |
 | **Model AI (dùng chung)** | Bật/tắt model, thứ tự ưu tiên, hạn mức request/token theo ngày và theo phút. |
 | **Các lần chạy gần đây** | 15 lần chạy gần nhất: số tin đã chấm / chọn / dịch / bỏ / loại và lỗi nếu có. |
 | **Nguồn đang lỗi** | Nguồn tin bị lỗi ở lần lấy gần nhất. |
@@ -70,7 +71,7 @@ Mọi mục hiển thị **chỉ đọc**. Chỉ **công tắc Bật/Tắt** có
 
 | Mục | Sửa được gì |
 |---|---|
-| **Cài đặt chung** | Trần request AI mỗi ngày, độ dài tóm tắt (số từ), số tin và số lượt mỗi ngày của các nút Xem thêm / Cập nhật / AI gợi ý, **từ khóa bỏ hẳn tin** (tin rác như trang giá, "price today"). Rê chuột vào ⓘ để xem giải thích. |
+| **Cài đặt chung** | Trần request AI mỗi ngày, độ dài tóm tắt (số từ), số tin và số lượt mỗi ngày của các nút Xem thêm / Cập nhật / AI gợi ý, **số ngày giữ dữ liệu** (bản tin, tin không đăng, nội dung bài gốc), **từ khóa bỏ hẳn tin** (tin rác như trang giá, "price today"). Rê chuột vào ⓘ để xem giải thích. |
 | **Bản tin** | Giờ chạy (theo múi giờ của bản tin, ví dụ `UTC+7 · Giờ Việt Nam`), ngày chạy trong tuần, số tin tối thiểu – tối đa, có cập nhật số liệu thị trường hay không. Tên bản tin cố định. |
 | **Thứ tự ưu tiên** | Các nhóm tin được lấp từ trên xuống. Kéo **⠿** để đổi thứ tự; ✏️ / **Thêm nhóm** để chọn danh mục (dropdown), cách lấy tin, **Tối đa**, **Điểm sàn**, **Sàn tin 2+**; 🗑️ để xóa. |
 | **Danh mục** | Từ khóa nhận diện, từ khóa ngoại lệ, mô tả cho AI. Tên và mã danh mục cố định. Có **AI gợi ý** (xem 2.5). |
@@ -107,6 +108,7 @@ Mỗi lần bấm Gợi ý dùng 1 request AI; mặc định tối đa **10 lư�
 - Supabase **pg_cron** kiểm tra mỗi 5 phút và gọi GitHub Actions khi đến giờ. Dự phòng: GitHub tự chạy `catch-up` lúc 07:30 VN và sau 08:45 New York nếu bản tin trong ngày chưa chạy.
 - Mỗi bản tin chỉ tạo 1 lần/ngày; chạy lại chỉ làm nốt phần dang dở.
 - **Hết hạn mức AI giữa chừng:** tin đã chọn giữ nguyên trạng thái, lần chạy kế tiếp làm tiếp — không mất dữ liệu, không trả phí.
+- **Dọn dữ liệu cũ:** 03:00 VN mỗi ngày tự xóa bản tin cũ hơn 365 ngày, tin không vào bản tin nào sau 7 ngày, chữ bài gốc sau 30 ngày (giữ tóm tắt và link); nhật ký chạy sau 90 ngày. Sửa số ngày trong Cài đặt chung. Dữ liệu đã xóa không khôi phục được.
 - Trần mặc định: 60 request AI/ngày cho cả hệ thống; Xem thêm 5 lượt, Cập nhật tin mới 3 lượt, AI gợi ý 10 lượt mỗi ngày.
 
 ---

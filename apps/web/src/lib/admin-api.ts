@@ -107,3 +107,24 @@ export async function fetchDispatches(db: SupabaseClient, topicId: string): Prom
     'schedule_dispatches',
   ) as DispatchRow[];
 }
+
+// ---------- Maintenance ----------
+
+export interface PurgeStatus {
+  /** Last purge (daily 03:00 VN or "Dọn ngay"): when and how many rows per table. */
+  readonly lastPurge: { readonly at: string; readonly counts: Readonly<Record<string, number>> } | null;
+  readonly sizeMb: number;
+}
+
+export async function fetchPurgeStatus(db: SupabaseClient): Promise<PurgeStatus> {
+  const [setting, size] = await Promise.all([
+    db.from('app_settings').select('value').eq('key', 'last_purge').maybeSingle(),
+    db.rpc('database_size_mb'),
+  ]);
+  const row = check(setting, 'app_settings') as { value: PurgeStatus['lastPurge'] } | null;
+  return { lastPurge: row?.value ?? null, sizeMb: Number(check(size, 'database_size_mb')) };
+}
+
+export async function purgeNow(db: SupabaseClient): Promise<Record<string, number>> {
+  return check(await db.rpc('purge_old_data_now'), 'purge_old_data_now') as Record<string, number>;
+}

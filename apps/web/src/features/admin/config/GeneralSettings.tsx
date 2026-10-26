@@ -24,6 +24,9 @@ const FIELDS: readonly NumberSetting[] = [
   { key: 'settings.refresh_size', label: 'Tin mỗi lần “Cập nhật”', help: 'Số tin bổ sung mỗi lần bấm Cập nhật tin mới.', min: 1 },
   { key: 'settings.daily_cap_refresh', label: 'Lượt “Cập nhật” mỗi ngày', help: 'Số lần được bấm Cập nhật tin mới trong một ngày.', min: 0 },
   { key: 'settings.daily_cap_assist', label: 'Lượt “AI gợi ý” mỗi ngày', help: 'Số lần được bấm Gợi ý trong popup sửa danh mục; mỗi lần dùng 1 request AI.', min: 0 },
+  { key: 'settings.retention_digest_days', label: 'Giữ bản tin (ngày)', help: 'Bản tin cũ hơn số ngày này bị xóa hẳn, kèm các tin trong đó (không khôi phục được). Tự dọn lúc 03:00 mỗi ngày.', min: 7 },
+  { key: 'settings.retention_unpublished_days', label: 'Giữ tin không đăng (ngày)', help: 'Tin đã lấy về nhưng không vào bản tin nào (bị lọc, trùng, điểm thấp, lỗi) bị xóa sau số ngày này.', min: 3 },
+  { key: 'settings.retention_snippet_days', label: 'Giữ nội dung bài gốc (ngày)', help: 'Sau số ngày này chỉ xóa phần chữ bài gốc đã đọc để tóm tắt; bản tóm tắt và đường dẫn vẫn giữ.', min: 7 },
 ];
 const EXCLUDE_HELP = 'Tin có một trong các từ này bị bỏ ngay từ đầu, không xét danh mục nào (trừ nguồn chính thức). Dùng cho tin rác như trang giá, “price today”.';
 
@@ -57,7 +60,7 @@ export function GeneralSettings({ topicId }: { topicId: string }) {
     <Section
       id="general"
       title="Cài đặt chung"
-      description="Hạn mức AI, độ dài tóm tắt, giới hạn nút bấm và tin rác cần bỏ."
+      description="Hạn mức AI, độ dài tóm tắt, giới hạn nút bấm, tin rác cần bỏ và thời gian giữ dữ liệu."
       error={error}
       action={topic && <EditButton name="cài đặt chung" onPress={() => setIsEditing(true)} />}
     >

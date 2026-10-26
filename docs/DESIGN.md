@@ -108,6 +108,22 @@ Migration `20261016000100_scheduler.sql`.
 3. Kiểm tra: `select jobname, schedule from cron.job;` — sau giờ chạy: `select * from schedule_dispatches order by dispatched_at desc;` và `select status_code, content from net._http_response order by created desc limit 5;` (mong đợi 204).
 4. Token hết hạn → tạo token mới, `select vault.update_secret((select id from vault.secrets where name = 'github_dispatch_token'), '<token mới>');`
 
+### 3.1a Dọn dữ liệu cũ
+
+Migration `20261026000200_retention.sql`. `public.purge_old_data()` chạy bởi **pg_cron lúc 20:00 UTC (03:00 VN)** mỗi ngày, xa giờ các bản tin; admin bấm **Dọn ngay** trên trang Vận hành gọi `purge_old_data_now()` (kiểm tra `is_admin()`).
+
+| Dữ liệu | Giữ | Cấu hình (`topics.settings`) |
+|---|---|---|
+| Bản tin + tin trong bản tin | 365 ngày (tối thiểu 7) | `retention_digest_days` |
+| Tin không vào bản tin nào (raw, lọc, trùng, chấm điểm, lỗi) | 7 ngày (tối thiểu 3) | `retention_unpublished_days` |
+| Chữ bài gốc (`content_snippet`) — giữ tóm tắt và link | 30 ngày (tối thiểu 7) | `retention_snippet_days` |
+| `crawl_runs`, `ai_usage`, `action_quota`, `schedule_dispatches` | 90 ngày | cố định |
+| `login_attempts` | 7 ngày | cố định |
+| `events` đã qua | 30 ngày | cố định |
+| `market_data` | không xóa (nhỏ, cần cho biểu đồ) | — |
+
+Không bao giờ xóa tin đang `selected`/`summarized` (đang xử lý dở). Mỗi bước xóa tối đa 20.000 dòng/lần. Kết quả lần dọn gần nhất lưu ở `app_settings.last_purge`; trang Vận hành hiện kết quả này và dung lượng DB (`database_size_mb()`, admin) so với 500 MB.
+
 ### 3.2 Ba loại dữ liệu trong một topic
 
 | Loại | Bảng | AI? |
@@ -421,8 +437,8 @@ Code: `apps/web` (Vite 8 + React 19 + HeroUI v3 + Tailwind v4 + TanStack Query +
 | Route | Nội dung |
 |---|---|
 | `/dang-nhap` | Username → mã 6 số (InputOTP) |
-| `/quan-tri?topic=` | Vận hành: nút Cập nhật tin mới theo edition, lượng dùng AI hôm nay so hạn mức, lượt bấm đã dùng, lần pg_cron gọi GitHub, bảng Model AI (bật/tắt, ưu tiên, hạn mức), 15 lần chạy gần nhất (chấm/chọn/dịch/bỏ/loại, lỗi), nguồn đang lỗi |
-| `/quan-tri/cau-hinh?topic=` | Cài đặt chung (hạn mức AI, độ dài tóm tắt, giới hạn nút, từ khóa bỏ hẳn tin dạng chip); Bản tin (card: tên cố định, múi giờ dạng `UTC+7 · Giờ Việt Nam`, chọn giờ, chọn thứ, số tin); Thứ tự ưu tiên (danh sách chỉ đọc, kéo thả sắp xếp, thêm/sửa trong popup, chỉ theo danh mục, tooltip giải thích điểm); Danh mục (tên + mã chỉ đọc, từ khóa nhận diện / ngoại lệ dạng chip, mô tả cho AI sửa qua nút bút chì); Nguồn tin; Số liệu & lịch. Mọi mục (kể cả Cài đặt chung, card Bản tin, Danh mục) hiển thị chỉ đọc, chỉ công tắc bật/tắt bấm tại chỗ; nút bút chì / Thêm mở popup có Hủy / OK, chỉ lưu khi bấm OK; mọi chỗ chọn danh mục là dropdown từ danh sách danh mục. Không còn bảng Chủ đề và Tổ chức. Model AI nằm ở trang Vận hành |
+| `/quan-tri?topic=` | Vận hành: nút Cập nhật tin mới theo edition, lượng dùng AI hôm nay so hạn mức, lượt bấm đã dùng, lần pg_cron gọi GitHub, bảng Model AI (bật/tắt, ưu tiên, hạn mức), Dọn dữ liệu cũ (dung lượng DB, lần dọn gần nhất, nút Dọn ngay có xác nhận), 15 lần chạy gần nhất (chấm/chọn/dịch/bỏ/loại, lỗi), nguồn đang lỗi |
+| `/quan-tri/cau-hinh?topic=` | Cài đặt chung (hạn mức AI, độ dài tóm tắt, giới hạn nút, số ngày giữ dữ liệu, từ khóa bỏ hẳn tin dạng chip); Bản tin (card: tên cố định, múi giờ dạng `UTC+7 · Giờ Việt Nam`, chọn giờ, chọn thứ, số tin); Thứ tự ưu tiên (danh sách chỉ đọc, kéo thả sắp xếp, thêm/sửa trong popup, chỉ theo danh mục, tooltip giải thích điểm); Danh mục (tên + mã chỉ đọc, từ khóa nhận diện / ngoại lệ dạng chip, mô tả cho AI sửa qua nút bút chì); Nguồn tin; Số liệu & lịch. Mọi mục (kể cả Cài đặt chung, card Bản tin, Danh mục) hiển thị chỉ đọc, chỉ công tắc bật/tắt bấm tại chỗ; nút bút chì / Thêm mở popup có Hủy / OK, chỉ lưu khi bấm OK; mọi chỗ chọn danh mục là dropdown từ danh sách danh mục. Không còn bảng Chủ đề và Tổ chức. Model AI nằm ở trang Vận hành |
 
 Admin đăng nhập thấy thêm link "Quản trị" ở header và nút "Xem thêm tin" cuối mỗi bản tin. Mọi thao tác ghi đều chạy với quyền admin nên RLS vẫn chặn khi phiên quá 15 ngày.
 
@@ -572,7 +588,7 @@ Secret runtime của Edge Functions (`ADMIN_EMAIL`, API key AI…) đặt một 
 | Nguồn đổi định dạng / chặn | `sources.last_error`, cảnh báo trên trang Vận hành; Google News làm lưới an toàn |
 | Giá dầu từ nguồn không chính thức hỏng | Fallback EIA (trễ 1 ngày) |
 | pg_cron / GitHub dispatch lỗi | Schedule GitHub dự phòng 1 lần/ngày chạy bù edition bị lỡ |
-| Supabase pause / chạm 500MB | Job ghi hằng ngày; cleanup theo `retention` của từng topic |
+| Supabase pause / chạm 500MB | Job ghi hằng ngày; pg_cron dọn dữ liệu cũ lúc 03:00 VN theo số ngày giữ của từng topic (§3.1a); trang Vận hành hiện dung lượng DB |
 | AI chấm điểm sai | `ai_reason` hiển thị cho admin; điểm cuối có thành phần tất định |
 | Bot đốt quota qua nút bấm | Nút chỉ cho admin + giới hạn lượt/ngày theo topic |
 | Deploy lỗi giữa chừng / migration hỏng | Thứ tự DB → Functions → Web → Worker; worker chạy theo tag `prod`; CI chạy migration trên Postgres local trước |
