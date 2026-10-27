@@ -19,7 +19,7 @@ describe('CategoryAssist', () => {
       <SupabaseContext.Provider value={{ functions: { invoke } } as never}>
         <QueryClientProvider client={new QueryClient()}>
           <CategoryAssist
-            topicId="macro_finance" categoryId="gold" keywords={['gold']} excludeKeywords={[]}
+            topicId="macro_finance" category={{ id: 'gold' }} keywords={['gold']} excludeKeywords={[]}
             onAddKeywords={onAddKeywords} onAddExcludes={onAddExcludes} onUseDescription={onUseDescription}
           />
         </QueryClientProvider>

@@ -9,22 +9,28 @@ import { HttpError, json, readJson, requireAdmin, requireEnv, serve, serviceClie
 
 const DEFAULT_DAILY_CAP = 10;
 
+// An existing category is read by id; a new one (add popup, not saved yet) only has its name.
 const bodySchema = z.object({
   topicId: z.string().min(1).max(64),
-  categoryId: z.string().min(1).max(64),
+  categoryId: z.string().min(1).max(64).optional(),
+  categoryName: z.string().trim().min(1).max(80).optional(),
   brief: z.string().trim().min(3).max(BRIEF_MAX_CHARS),
-});
+}).refine((b) => b.categoryId || b.categoryName);
+
+type CategoryRow = { name_vi: string; keywords: string[] | null; exclude_keywords: string[] | null; description_en: string | null };
 
 serve(async (req) => {
   const db = serviceClient();
   await requireAdmin(req, db);
   const parsed = bodySchema.safeParse(await readJson(req));
   if (!parsed.success) throw new HttpError(400, `Mô tả cần từ 3 đến ${BRIEF_MAX_CHARS} ký tự.`);
-  const { topicId, categoryId, brief } = parsed.data;
+  const { topicId, categoryId, categoryName, brief } = parsed.data;
 
   const [topic, category] = await Promise.all([
     db.from('topics').select('name_vi, description_vi, ai_daily_request_cap, settings').eq('id', topicId).maybeSingle(),
-    db.from('categories').select('name_vi, keywords, exclude_keywords, description_en').eq('topic_id', topicId).eq('id', categoryId).maybeSingle(),
+    categoryId
+      ? db.from('categories').select('name_vi, keywords, exclude_keywords, description_en').eq('topic_id', topicId).eq('id', categoryId).maybeSingle()
+      : Promise.resolve({ data: { name_vi: categoryName!, keywords: [], exclude_keywords: [], description_en: null } as CategoryRow, error: null }),
   ]);
   if (topic.error || category.error) throw new Error(topic.error?.message ?? category.error?.message);
   if (!topic.data || !category.data) throw new HttpError(404, 'Không tìm thấy danh mục.');
@@ -44,7 +50,7 @@ serve(async (req) => {
     topicName: topic.data.name_vi,
     topicDescription: topic.data.description_vi,
     categoryName: category.data.name_vi,
-    categoryId,
+    categoryId: categoryId ?? '(new)',
     brief,
     keywords: category.data.keywords ?? [],
     excludeKeywords: category.data.exclude_keywords ?? [],

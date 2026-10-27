@@ -74,7 +74,7 @@ Mọi mục hiển thị **chỉ đọc**. Chỉ **công tắc Bật/Tắt** có
 | **Cài đặt chung** | Trần request AI mỗi ngày, độ dài tóm tắt (số từ), số tin và số lượt mỗi ngày của các nút Xem thêm / Cập nhật / AI gợi ý, **số ngày giữ dữ liệu** (bản tin, tin không đăng, nội dung bài gốc), **từ khóa bỏ hẳn tin** (tin rác như trang giá, "price today"). Rê chuột vào ⓘ để xem giải thích. |
 | **Bản tin** | Giờ chạy (theo múi giờ của bản tin, ví dụ `UTC+7 · Giờ Việt Nam`), ngày chạy trong tuần, số tin tối thiểu – tối đa, có cập nhật số liệu thị trường hay không. Tên bản tin cố định. |
 | **Thứ tự ưu tiên** | Các nhóm tin được lấp từ trên xuống. Kéo **⠿** để đổi thứ tự; ✏️ / **Thêm nhóm** để chọn danh mục (dropdown), cách lấy tin, **Tối đa**, **Điểm sàn**, **Sàn tin 2+**; 🗑️ để xóa. |
-| **Danh mục** | Từ khóa nhận diện, từ khóa ngoại lệ, mô tả cho AI. Tên và mã danh mục cố định. Có **AI gợi ý** (xem 2.5). |
+| **Danh mục** | Từ khóa nhận diện, từ khóa ngoại lệ, mô tả cho AI. Có **AI gợi ý** (xem 2.5). **Thêm danh mục**: chỉ nhập tên, mã tự tạo từ tên (không trùng); sau khi lưu tên và mã cố định. Nhớ đưa danh mục mới vào một nhóm ở Thứ tự ưu tiên. **Xóa** (🗑): chỉ xóa được khi không nhóm ưu tiên nào dùng danh mục — gỡ khỏi các nhóm trước; tin cũ giữ nguyên nhưng mất nhãn danh mục. Muốn tạm ngừng thì tắt công tắc. |
 | **Nguồn tin** | Thêm / sửa / xóa nguồn RSS hoặc Google News: URL hoặc truy vấn, danh mục mặc định (dropdown), điểm uy tín (≥ 10 = nguồn chính thức, luôn qua bước lọc). Cột cuối hiện lỗi gần nhất. |
 | **Số liệu & lịch** | Bật/tắt và đổi tên các module: giá dầu, giá vàng, lợi suất Mỹ, lợi suất Nhật, lãi suất FED & kinh tế Mỹ, lịch sự kiện vĩ mô. Tắt module thì dữ liệu cũ vẫn giữ. |
 
