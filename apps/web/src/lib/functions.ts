@@ -52,6 +52,13 @@ export interface CategorySuggestion {
 }
 
 /** AI suggestions for one category from the admin's notes; nothing is saved by the call. */
-export function requestCategoryAssist(db: SupabaseClient, topicId: string, categoryId: string, brief: string): Promise<CategorySuggestion> {
-  return invoke<CategorySuggestion>(db, 'category-assist', { topicId, categoryId, brief });
+/** Existing category: pass its id. New category in the add popup: pass its name. */
+export function requestCategoryAssist(
+  db: SupabaseClient,
+  topicId: string,
+  category: { readonly id: string } | { readonly name: string },
+  brief: string,
+): Promise<CategorySuggestion> {
+  const ref = 'id' in category ? { categoryId: category.id } : { categoryName: category.name };
+  return invoke<CategorySuggestion>(db, 'category-assist', { topicId, ...ref, brief });
 }

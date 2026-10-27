@@ -9,7 +9,8 @@ const BRIEF_MAX_CHARS = 600;
 
 type Props = {
   readonly topicId: string;
-  readonly categoryId: string;
+  /** Existing category by id, or the name typed in the add popup. */
+  readonly category: { readonly id: string } | { readonly name: string };
   readonly keywords: readonly string[];
   readonly excludeKeywords: readonly string[];
   readonly onAddKeywords: (items: string[]) => void;
@@ -18,10 +19,10 @@ type Props = {
 };
 
 /** "AI gợi ý": the admin describes the category, AI suggests; nothing changes until the admin picks a suggestion. */
-export function CategoryAssist({ topicId, categoryId, keywords, excludeKeywords, onAddKeywords, onAddExcludes, onUseDescription }: Props) {
+export function CategoryAssist({ topicId, category, keywords, excludeKeywords, onAddKeywords, onAddExcludes, onUseDescription }: Props) {
   const db = useSupabase();
   const [brief, setBrief] = useState('');
-  const assist = useMutation({ mutationFn: () => requestCategoryAssist(db, topicId, categoryId, brief.trim()) });
+  const assist = useMutation({ mutationFn: () => requestCategoryAssist(db, topicId, category, brief.trim()) });
   const result = assist.data;
   const newKeywords = (result?.keywords ?? []).filter((k) => !keywords.includes(k));
   const newExcludes = (result?.excludeKeywords ?? []).filter((k) => !excludeKeywords.includes(k));

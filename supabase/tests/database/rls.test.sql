@@ -1,7 +1,7 @@
 -- RLS / grants contract (docs/DESIGN.md §10.1). Run with: supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(27);
+select plan(28);
 
 -- ===== Public visitor =====
 set local role anon;
@@ -124,6 +124,13 @@ reset role;
 update auth.users set last_sign_in_at = now() - interval '20 days' where id = '00000000-0000-0000-0000-0000000000a1';
 set local role authenticated;
 select throws_ok($$ select public.purge_old_data_now() $$, '42501', null, 'expired admin cannot purge');
+
+-- ===== Category in use by a priority slot cannot be deleted =====
+reset role;
+select throws_ok(
+  $$ delete from public.categories where topic_id = 'macro_finance' and id = 'fed' $$,
+  '23503', null, 'category used by a slot cannot be deleted'
+);
 
 select * from finish();
 rollback;
