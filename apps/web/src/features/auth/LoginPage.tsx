@@ -1,16 +1,23 @@
 import { Alert, Button, Card, Input, InputOTP, REGEXP_ONLY_DIGITS } from '@heroui/react';
 import { type FormEvent, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router';
+import { Navigate, useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../../lib/auth.tsx';
 import { requestLoginCode, verifyLoginCode } from '../../lib/functions.ts';
 import { useSupabase } from '../../lib/supabase.ts';
 
 type Step = 'username' | 'code';
 
+/** Where to go after login: an in-app path from ?next=, never another site. */
+export function afterLoginPath(next: string | null): string {
+  return next && /^\/[a-z0-9-]/i.test(next) ? next : '/quan-tri';
+}
+
 export function LoginPage() {
   const db = useSupabase();
   const auth = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const destination = afterLoginPath(params.get('next'));
   const [step, setStep] = useState<Step>('username');
   const [username, setUsername] = useState('');
   const [code, setCode] = useState('');
@@ -18,7 +25,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
-  if (!auth.isLoading && auth.isAdmin) return <Navigate to="/quan-tri" replace />;
+  if (!auth.isLoading && auth.isAdmin) return <Navigate to={destination} replace />;
 
   const run = async (action: () => Promise<void>) => {
     setIsBusy(true);
@@ -43,7 +50,7 @@ export function LoginPage() {
   const handleVerify = (value: string) => {
     void run(async () => {
       await verifyLoginCode(db, value);
-      navigate('/quan-tri', { replace: true });
+      navigate(destination, { replace: true });
     });
   };
 

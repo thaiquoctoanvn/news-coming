@@ -141,7 +141,7 @@ News Coming   [ Tài chính ] [ Việc làm ↗ ]      Bản tin · Lịch · Bi
 - Hai nút khu vực cạnh tên trang. "Việc làm ↗" **chỉ render khi `auth.isAdmin`**, mở `/viec-lam` ở tab mới
   (`target="_blank" rel="noopener noreferrer"`).
 - `/` vẫn vào bảng tin tài chính.
-- Menu giữa theo khu vực: tài chính = Bản tin · Lịch sự kiện · Biểu đồ; việc làm = Hôm nay · Tất cả.
+- Menu giữa chỉ có ở khu vực tài chính (Bản tin · Lịch sự kiện · Biểu đồ). Trang việc làm là một trang duy nhất, chọn ngày ngay trên trang (đã bỏ mục "Hôm nay · Tất cả" vì trùng chức năng với bộ chọn ngày).
 - Màn hình nhỏ: nút khu vực ở dòng 1, menu xuống dòng 2 như hiện nay.
 
 ### 7.2 Trang `/viec-lam`
@@ -159,8 +159,9 @@ News Coming   [ Tài chính ] [ Việc làm ↗ ]      Bản tin · Lịch · Bi
 
 ### 7.3 Trang Vận hành — khối "Việc làm"
 
-Lần chạy gần nhất, nguồn đang lỗi, công tắc từng nguồn, chi tiêu tìm kiếm so với trần, số dư ước tính,
-nút chạy tay, popup sửa hồ sơ chấm điểm, popup nhập số tiền/ngày nạp credit.
+5 lần chạy gần nhất, nguồn đang lỗi, công tắc từng nguồn, chi tiêu tìm kiếm so với trần, số dư ước tính,
+popup sửa hồ sơ chấm điểm, popup nhập số tiền/ngày nạp credit. Chưa có nút chạy tay trên web (cần thêm một
+Edge Function gọi `workflow_dispatch`); hiện chạy tay ở GitHub → Actions → Scan jobs.
 
 ## 8. Thứ tự làm (mỗi bước một PR vào `main`)
 
