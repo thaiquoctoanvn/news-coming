@@ -241,7 +241,7 @@ describe('runJobs', () => {
     const stats = await runJobs({ store, reader, router: scoringRouter(), adapters, engines: NO_SEARCH, trigger: 'manual', now: () => NOW });
 
     expect(stats).toMatchObject({ found: 2, inserted: 2, unverified: 1, scored: 2 });
-    expect(store.jobs.map((job) => [job.title, job.verification, job.tier, job.reportDate])).toEqual([
+    expect(store.jobs.map((job) => [job.title, job.verification, store.scoreOf(job.id)?.tier, store.scoreOf(job.id)?.reportDate])).toEqual([
       ['Android Developer', 'verified', 'top', '2026-11-14'],
       ['Mobile Engineer', 'unverified', 'unverified', '2026-11-14'],
     ]);
@@ -284,7 +284,41 @@ describe('runJobs', () => {
 
     const later = await run(new Date('2026-11-28T03:00:00Z'));
     expect(later).toMatchObject({ updated: 1, inserted: 0, scored: 0 });
-    expect(store.jobs[0]).toMatchObject({ reportDate: '2026-11-28', isUpdate: true, score: 8, tier: 'top' });
+    expect(store.jobs[0]).toMatchObject({ reportDate: '2026-11-28', isUpdate: true });
+    expect(store.scoreOf('job-1')).toMatchObject({ reportDate: '2026-11-28', score: 8, tier: 'top' });
+  });
+
+  test('every enabled profile scores each job and gets its own report; a profile added later catches up', async () => {
+    const { store, adapters, reader } = setup([found({})]);
+    store.profiles = [{ id: 'p1', title: 'Android', text: 'Kotlin, 5 năm' }, { id: 'p2', title: 'Flutter', text: 'Flutter, 3 năm' }];
+    const prompts: string[] = [];
+    const router = {
+      complete: async (_role: string, request: { user: string }) => {
+        prompts.push(request.user);
+        return { providerId: 'test', data: { jobs: [{ id: 'j1', score: request.user.includes('Flutter') ? 4 : 9, reason: 'ok', tip: null }] } };
+      },
+    } as unknown as AiRouter;
+    const run = () => runJobs({ store, reader, router, adapters, engines: NO_SEARCH, trigger: 'manual', now: () => NOW });
+
+    expect((await run()).scored).toBe(2);
+    expect(prompts).toHaveLength(2);
+    expect(store.jobs).toHaveLength(1);
+    expect(store.scoreOf('job-1', 'p1')).toMatchObject({ score: 9, tier: 'top', reportDate: '2026-11-14' });
+    expect(store.scoreOf('job-1', 'p2')).toMatchObject({ score: 4, tier: 'low', reportDate: '2026-11-14' });
+
+    store.profiles = [...store.profiles, { id: 'p3', title: 'Lead', text: 'Team lead' }];
+    expect((await run()).scored).toBe(1);
+    expect(store.scoreOf('job-1', 'p3')).toMatchObject({ score: 9, reportDate: '2026-11-14' });
+  });
+
+  test('without an enabled profile jobs are collected and verified but not scored', async () => {
+    const { store, adapters, reader } = setup([found({})]);
+    store.profiles = [];
+
+    const stats = await runJobs({ store, reader, router: scoringRouter(), adapters, engines: NO_SEARCH, trigger: 'manual', now: () => NOW });
+
+    expect(stats).toMatchObject({ inserted: 1, scored: 0 });
+    expect(store.jobs[0]).toMatchObject({ verification: 'verified', reportDate: null });
   });
 
   test('when AI quota runs out the run is partial and unscored jobs wait for the next run', async () => {
@@ -296,7 +330,7 @@ describe('runJobs', () => {
     expect(store.jobs[0]).toMatchObject({ verification: 'verified', reportDate: null });
 
     await runJobs({ store, reader, router: scoringRouter(), adapters, engines: NO_SEARCH, trigger: 'schedule', now: () => NOW });
-    expect(store.jobs[0]).toMatchObject({ score: 8, reportDate: '2026-11-14' });
+    expect(store.scoreOf('job-1')).toMatchObject({ score: 8, reportDate: '2026-11-14' });
   });
 
   test('a failing source does not stop the others', async () => {

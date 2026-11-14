@@ -3,7 +3,7 @@ import { AiUnavailableError, type AiRouter } from '../shared.ts';
 import { dedupeKey, inScope, normalizeUrl, refreshedText, urlHash, vietnamDate } from './filter.ts';
 import type { PageReader } from './page-reader.ts';
 import { type SearchEngines, discover } from './search/discover.ts';
-import { DEFAULT_PROFILE, SCORE_BATCH, assignTiers, scoreBatch } from './score.ts';
+import { SCORE_BATCH, assignTiers, scoreBatch } from './score.ts';
 import type { JobAdapter } from './sources/index.ts';
 import type { FoundJob, JobRunStats, JobStore, JobTrigger, KnownJob, NewJob, SourceStats } from './types.ts';
 import { checkPosting } from './verify.ts';
@@ -24,6 +24,8 @@ export interface JobRunOptions {
 
 const MAX_VERIFY_PER_RUN = 80;
 const MAX_SCORE_PER_RUN = 60;
+// A profile added later only scores postings that are still current, not the whole history.
+const SCORE_WINDOW_DAYS = 14;
 const REPOSTED = 'đăng lại nhiều lần';
 // A job that is still listed is shown again after this many days, so a long-running opening is not missed.
 const REMIND_AFTER_DAYS = 14;
@@ -170,27 +172,31 @@ async function verify(options: JobRunOptions, now: Date): Promise<{ closed: numb
   return { closed, unverified };
 }
 
+/** Scores every pending job once per enabled profile; each profile gets its own report for today. */
 async function score(options: JobRunOptions, now: Date): Promise<{ scored: number; stopped: string | null }> {
   const { store } = options;
   const today = vietnamDate(now);
-  const profile = await store.loadProfile();
-  if (!profile) log.warn('no scoring profile saved; using the generic default');
-  const jobs = await store.loadUnscored(MAX_SCORE_PER_RUN);
+  const seenSince = new Date(now.getTime() - SCORE_WINDOW_DAYS * DAY_MS);
+  const profiles = await store.loadProfiles();
+  if (profiles.length === 0) log.warn('no enabled scoring profile; jobs stay unscored');
   let scored = 0;
   let stopped: string | null = null;
-  for (let start = 0; start < jobs.length; start += SCORE_BATCH) {
-    const batch = jobs.slice(start, start + SCORE_BATCH);
-    try {
-      const scores = await scoreBatch(options.router, profile ?? DEFAULT_PROFILE, batch);
-      for (const [id, result] of scores) await store.saveScore(id, result, today);
-      scored += scores.size;
-    } catch (error: unknown) {
-      if (!(error instanceof AiUnavailableError)) throw error;
-      // Out of free AI quota: the unscored jobs stay queued for the next run.
-      stopped = errorMessage(error).slice(0, 300);
-      break;
+  for (const profile of profiles) {
+    const jobs = stopped ? [] : await store.loadUnscored(profile.id, seenSince, MAX_SCORE_PER_RUN - scored);
+    for (let start = 0; start < jobs.length && !stopped; start += SCORE_BATCH) {
+      const batch = jobs.slice(start, start + SCORE_BATCH);
+      try {
+        const scores = await scoreBatch(options.router, profile.text, batch);
+        for (const [jobId, result] of scores) await store.saveScore(jobId, profile.id, result, today);
+        scored += scores.size;
+      } catch (error: unknown) {
+        if (!(error instanceof AiUnavailableError)) throw error;
+        // Out of free AI quota: the unscored jobs stay queued for the next run.
+        stopped = errorMessage(error).slice(0, 300);
+      }
     }
+    // Reminders move old scores to today's report, so tiers are refreshed even when nothing was scored.
+    await store.saveTiers(profile.id, assignTiers(await store.loadReport(profile.id, today)));
   }
-  await store.saveTiers(assignTiers(await store.loadReport(today)));
   return { scored, stopped };
 }

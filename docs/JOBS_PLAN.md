@@ -28,6 +28,9 @@ Routine cũ **không** gửi email; pipeline mới cũng không gửi email hay 
 | Tin đã báo vẫn còn trên nguồn | Nhắc lại sau 14 ngày kể từ lần báo gần nhất, tag "Cập nhật", giữ điểm cũ (không chấm lại). Tin chỉ được làm mới trong vòng 14 ngày thì im lặng (chốt 2026-11-15) |
 | Giữ tin | 30 ngày kể từ lần cuối còn thấy trên nguồn (chỉnh được, tối thiểu 21); tin đã đóng 30 ngày; nội dung trang tin 7 ngày sau khi báo |
 | Nút "Quét ngay" | Có hộp cảnh báo, chỉ chạy khi bấm OK; tối đa 3 lượt/ngày, chặn ở Edge Function `trigger-jobs` |
+| Hồ sơ chấm điểm | Nhiều hồ sơ, mỗi hồ sơ bắt buộc có tiêu đề; quét, chấm và lưu theo từng hồ sơ; trang bản tin xem theo từng hồ sơ (chốt 2026-11-16) |
+| Quản trị | Mỗi khu vực tin có trang quản trị riêng (`/quan-tri` cho tài chính, `/viec-lam/quan-tri` cho việc làm), chấp nhận lặp giao diện |
+| Trang bản tin việc làm | Mở cùng tab (không mở tab mới); lưới 3 cột; bấm thẻ mở popup chi tiết |
 | Trang tuyển dụng công ty | Thử Gemini trước; không ra thì viết code đọc riêng (kết quả: phải viết riêng, xem §9) |
 
 ## 3. Kết quả thử nghiệm (nhánh `spike/job-sources`, chạy trên GitHub Actions 2026-11-14)

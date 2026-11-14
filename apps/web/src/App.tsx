@@ -59,6 +59,8 @@ export const router = createBrowserRouter([
     errorElement: <RouteError />,
     children: [
       { index: true, lazy: async () => ({ Component: (await import('./features/jobs/JobsPage.tsx')).JobsPage }) },
+      // The job board's own admin page; the finance digest keeps /quan-tri.
+      { path: 'quan-tri', lazy: async () => ({ Component: (await import('./features/jobs/JobsAdminPage.tsx')).JobsAdminPage }) },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },

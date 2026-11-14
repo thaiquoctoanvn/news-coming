@@ -2,15 +2,12 @@ import { z } from 'zod';
 import type { AiRouter, ChatRequest } from '../shared.ts';
 import type { JobScore, JobTier, ReportedJob, UnscoredJob } from './types.ts';
 
-// Fit score of a posting against the admin's profile. The profile only ranks jobs; it never removes one.
+// Fit score of a posting against one scoring profile. A profile only ranks jobs; it never removes one.
 
 export const SCORE_BATCH = 4;
 const MAX_POSTING_CHARS = 1_500;
 const TOP_COUNT = 3;
 const TOP_MIN_SCORE = 6;
-
-/** Used until the admin saves a profile on the operations page. Generic on purpose: the repo is public. */
-export const DEFAULT_PROFILE = 'Android developer (Kotlin, Java), mid to senior level, looking for Android or mobile roles.';
 
 const SYSTEM = `You rate how well job postings fit one candidate. Answer with JSON only:
 {"jobs":[{"id":"j1","score":7,"reason":"...","tip":"..."}]}
