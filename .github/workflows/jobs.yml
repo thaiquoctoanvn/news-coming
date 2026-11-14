@@ -1,0 +1,47 @@
+name: Scan jobs
+
+# Daily Android / mobile job scan for the admin-only job page (docs/JOBS_PLAN.md).
+# Runs from the `prod` tag like the digest worker, so its DB migrations are already deployed.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '45 0 * * *'  # 07:45 Vietnam
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jobs
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    # Jina Reader calls are spaced 3 s apart and AI scoring waits for free per-minute windows.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: prod
+      - name: Check prod tag has the job scan
+        run: |
+          if [ ! -f apps/worker/src/jobs/run.ts ]; then
+            echo "::error::The prod tag ($(git rev-parse --short HEAD)) has no job scan yet. Wait for the Deploy workflow on main to finish, then run again."
+            exit 1
+          fi
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Scan
+        working-directory: apps/worker
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TRIGGER: ${{ github.event_name == 'schedule' && 'schedule' || 'manual' }}
+        run: node src/index.ts jobs --trigger "$TRIGGER"

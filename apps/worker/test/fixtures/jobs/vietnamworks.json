@@ -1,0 +1,181 @@
+{
+ "meta": {
+  "code": 200,
+  "message": "Success",
+  "nbHits": 6,
+  "page": 0,
+  "nbPages": 1,
+  "hitsPerPage": 20,
+  "totalJobsText": "6"
+ },
+ "data": [
+  {
+   "jobId": 2120402,
+   "jobTitle": "Kỹ Sư Phầm Mềm Nhúng",
+   "jobUrl": "https://www.vietnamworks.com/ky-su-pham-mem-nhung-1792137218389607841-2120402-jv",
+   "companyName": "Công Ty Cổ Phần Công Nghệ Công Nghiệp Bưu Chính Viễn Thông - VNPT Technology",
+   "expiredOn": "2026-11-15T23:59:59+07:00",
+   "isActive": true,
+   "onlineOn": "2026-11-07T11:34:00+07:00",
+   "approvedOn": "2026-10-16T14:53:38+07:00",
+   "prettySalary": "Thương lượng",
+   "jobDescription": "<p><strong>MỤC ĐÍCH CÔNG VIỆC </strong></p><p>Phụ trách thiết kế, phát triển và cài đặt các giải pháp phần mềm, thuộc một trong các lĩnh vực sau: phần mềm nhúng, phần mềm hệ thống, ứng dụng di động. Kỹ sư phát triển phần mềm có vai trò xây dựng được phần mềm chạy tốt, chất lượng...",
+   "jobRequirement": "<p><strong>TIÊU CHUẨN NĂNG LỰC</strong></p><p><strong>1 Trình độ học vấn: </strong>Đại học chuyên ngành Công nghệ thông tin, Điện tử viễn thông hoặc các chuyên ngành liên quan</p><p><strong>2 Chứng chỉ:</strong> Không yêu cầu</p><p><strong>3 Kinh nghiệm: </strong></p><p>- Ít nhất 2 năm kinh nghiệm ở vị trí tương đương</p><p>- Có tối thiểu 1 năm kinh nghiệm lập trình...",
+   "workingLocations": [
+    {
+     "workingLocationId": 206061,
+     "addressId": 131822,
+     "cityId": 24,
+     "districtId": 0,
+     "address": "124 Hoàng Quốc Việt",
+     "geoLoc": {
+      "lat": 0,
+      "lon": 0
+     },
+     "cityName": "Ha Noi",
+     "cityNameVI": "Hà Nội"
+    }
+   ]
+  },
+  {
+   "jobId": 2131239,
+   "jobTitle": "Senior Mobile Native Developer (iOS/Android)",
+   "jobUrl": "https://www.vietnamworks.com/senior-mobile-native-developer-ios-android-1794564620703969788-2131239-jv",
+   "companyName": "Công Ty Cổ Phần Chứng Khoán KIS Việt Nam",
+   "expiredOn": "2026-12-13T23:59:59+07:00",
+   "isActive": true,
+   "onlineOn": "2026-11-13T17:10:20+07:00",
+   "approvedOn": "2026-11-13T17:10:20+07:00",
+   "prettySalary": "Thương lượng",
+   "jobDescription": "<p><strong><u>Responsibilities: </u></strong></p><ul><li>Develop and maintain mobile applications using Swift (iOS) or Kotlin (Android).</li><li>Architect clean, scalable, and testable codebases.</li><li>Integrate mobile apps with secure backend services and APIs.</li><li>Optimize for performance, battery efficiency, and responsive UI/UX.</li><li>Implement mobile security best practices (e.g., bio",
+   "jobRequirement": "<p><strong><u>Requirements:</u></strong></p><ul><li>Bachelor’s degree in Information Technology, Management Information Systems, Computer Science, or a related field.</li><li>4+ years of experience in native iOS or Android development.</li><li>Strong command of Swift (UIKit/SwiftUI) or Kotlin (Jetpack Compose).</li><li>Solid understanding of mobile architecture patterns (MVVM, Clean Architecture).",
+   "workingLocations": [
+    {
+     "workingLocationId": 169039,
+     "addressId": 107301,
+     "cityId": 29,
+     "districtId": 1,
+     "address": "Level 3, TNR building, 180-192 Nguyen Cong Tru, Nguyen Thai Binh Ward, Dist.1, HCMC",
+     "geoLoc": {
+      "lat": 10.768648,
+      "lon": 106.701098
+     },
+     "cityName": "Ho Chi Minh",
+     "cityNameVI": "Hồ Chí Minh"
+    }
+   ]
+  },
+  {
+   "jobId": 2113321,
+   "jobTitle": "IT - Mobile Developer (React Native)",
+   "jobUrl": "https://www.vietnamworks.com/it-mobile-developer-react-native-1790675822918777317-2113321-jv",
+   "companyName": "Ngân Hàng TMCP Á Châu (ACB)",
+   "expiredOn": "2026-12-09T23:59:59+07:00",
+   "isActive": true,
+   "onlineOn": "2026-11-12T17:00:00+07:00",
+   "approvedOn": "2026-11-09T10:52:51+07:00",
+   "prettySalary": "Thương lượng",
+   "jobDescription": "<p>We are looking for an experienced Mobile Developer who is responsible for the development of frontend services. The candidate for this position should have experience in mobile development (Android/iOS). Having a strong background in cryptography is a big plus.</p><p><br></p><p><strong>Responsibilities</strong></p><p>• Participate in coding and code reviews to deliver a high quality product</p>",
+   "jobRequirement": "<p><strong>Education</strong></p><p>• BS/MS degree in Computer Science, Software Engineering, or a related technical field</p><p><br></p><p><strong>Technical Skills &amp; Experience</strong></p><p>• Good understanding of OOP, design patterns, multithreading/concurrency programming, data structures, and algorithms</p><p>• At least 3 years of experience in React Native programming; knowledge of Reac",
+   "workingLocations": [
+    {
+     "workingLocationId": 257092,
+     "addressId": 169405,
+     "cityId": 29,
+     "districtId": 0,
+     "address": "ACB - 442 Nguyễn Thị Minh Khai, Phường Bàn Cờ, TP. Hồ Chí Minh",
+     "geoLoc": {
+      "lat": 0,
+      "lon": 0
+     },
+     "cityName": "Ho Chi Minh",
+     "cityNameVI": "Hồ Chí Minh"
+    }
+   ]
+  },
+  {
+   "jobId": 2124188,
+   "jobTitle": "Senior Game QA Tester – STYLZ (ZEPETO · NAVER Z)",
+   "jobUrl": "https://www.vietnamworks.com/senior-game-qa-tester-stylz-zepeto-naver-z-2124188-jv",
+   "companyName": "SNOW VIỆT NAM",
+   "expiredOn": "2026-11-26T23:59:59+07:00",
+   "isActive": true,
+   "onlineOn": "2026-11-10T17:00:00+07:00",
+   "approvedOn": "2026-10-27T16:49:26+07:00",
+   "prettySalary": "Từ 15tr ₫/tháng",
+   "jobDescription": "<p>About us:</p><p><strong>SNOW Vietnam is part of the NAVER family, Korea’s leading internet company. Our team in Ho Chi Minh City works with headquarters in Korea on global apps used by millions, including ZEPETO, SNOW and B612.</strong></p><p><br></p><p>About STYLZ:</p><p><strong>STYLZ is a mobile fashion styling game from ZEPETO, operated by NAVER Z. It is live on iOS...",
+   "jobRequirement": "<p><strong>• 5+ years of experience in software or game QA, including mobile apps</strong></p><p>• <strong>Working English</strong> (reading and writing) for daily communication with the product team</p><p>• Strong curiosity and persistence — you keep testing until you understand the cause, not only the symptom</p><p>• Clear, structured written reporting</p><p>• Regular mobile game player — please",
+   "workingLocations": [
+    {
+     "workingLocationId": 271891,
+     "addressId": 96410,
+     "cityId": 29,
+     "districtId": 0,
+     "address": "Ho Chi Minh",
+     "geoLoc": {
+      "lat": 10.823099,
+      "lon": 106.629664
+     },
+     "cityName": "Ho Chi Minh",
+     "cityNameVI": "Hồ Chí Minh"
+    }
+   ]
+  },
+  {
+   "jobId": 2126233,
+   "jobTitle": "Android Engineer",
+   "jobUrl": "https://www.vietnamworks.com/android-engineer-1793355657208796505-2126233-jv",
+   "companyName": "ASSA ABLOY Vietnam",
+   "expiredOn": "2026-11-29T23:59:59+07:00",
+   "isActive": true,
+   "onlineOn": "2026-10-30T17:20:57+07:00",
+   "approvedOn": "2026-10-30T17:20:57+07:00",
+   "prettySalary": "$ 1,000-1,500 /tháng",
+   "jobDescription": "<p>1. RESPONSIBILITY</p><ul><li>Full lifecycle of Android application development</li><li>Design, implement and debug Android applications with good quality, fancy UI, strong stability, and compatibility</li><li>Software analysis, code analysis, requirements analysis, software review, identification of code metrics, system risk analysis and software reliability analysis</li><li>Object-oriented Des",
+   "jobRequirement": "<ul><li>Bachelor&#39;s degree in Computer Science or equivalent</li><li>2+ years’ experience in developing Android applications</li><li>Proficient with Kotlin, Kotlin Coroutines, Kotlin DSL, Java and JNI</li><li>Experience in leveraging Android SDK and NDK for application development (experience with Cloud SDKs is a plus!)</li><li>Experience in Bluetooth mechanism and native APIs</li><li>Experienc",
+   "workingLocations": [
+    {
+     "workingLocationId": 200042,
+     "addressId": 159326,
+     "cityId": 29,
+     "districtId": 0,
+     "address": "1st floor, 146 Nguyễn Đình Chiểu, Xuan Hoa, Xuân Hòa, Hồ Chí Minh, Vietnam",
+     "geoLoc": {
+      "lat": 0,
+      "lon": 0
+     },
+     "cityName": "Ho Chi Minh",
+     "cityNameVI": "Hồ Chí Minh"
+    }
+   ]
+  },
+  {
+   "jobId": 2120295,
+   "jobTitle": "Senior Mobile Developer (Android + IOS) Remote",
+   "jobUrl": "https://www.vietnamworks.com/senior-mobile-developer-android-ios-remote-1792131956562885199-2120295-jv",
+   "companyName": "GSTEX",
+   "expiredOn": "2026-11-15T23:59:59+07:00",
+   "isActive": true,
+   "onlineOn": "2026-10-16T13:25:56+07:00",
+   "approvedOn": "2026-10-16T13:25:56+07:00",
+   "prettySalary": "$ 1,500-4,000 /tháng",
+   "jobDescription": "<p><p><strong>About Us</strong></p><p>GSTEX is an early-stage travel technology startup based in Chicago. We build See N’ Do (seeando.com), a guest experience app that gives hotel guests a personal concierge in their pocket — curated local recommendations, experiences, and services that help them make the most of their stay.  We work with major multinational hospitality...",
+   "jobRequirement": "<p>• 4+ years of professional mobile development experience</p><p>    • Strong hands-on experience with both Android (Kotlin/Java) and iOS (Swift/SwiftUI) — OR strong</p><p>    experience with a cross-platform framework (Flutter or React Native) plus the ability to work on native</p><p>    modules when needed</p><p>    •...",
+   "workingLocations": [
+    {
+     "workingLocationId": 271626,
+     "addressId": 94704,
+     "cityId": 29,
+     "districtId": 0,
+     "address": "",
+     "geoLoc": {
+      "lat": 0,
+      "lon": 0
+     },
+     "cityName": "Ho Chi Minh",
+     "cityNameVI": "Hồ Chí Minh"
+    }
+   ]
+  }
+ ]
+}
