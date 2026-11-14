@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useParams } from 'react-router';
 import { useAuth } from '../lib/auth.tsx';
 import { useTopics } from '../lib/queries.ts';
+import { AreaSwitch } from './AreaSwitch.tsx';
 import { ThemeToggle } from './ThemeToggle.tsx';
 
 const SECTIONS = [
@@ -56,6 +57,8 @@ export function AppShell() {
             <span className="block font-serif text-2xl font-bold leading-tight tracking-tight">News Coming</span>
             <span className="block truncate text-xs uppercase tracking-[0.2em] text-muted">{current?.name ?? 'Bản tin'}</span>
           </NavLink>
+
+          <AreaSwitch current="finance" className="order-last w-full md:order-none md:w-auto" />
 
           <nav aria-label="Mục chính" className="order-last flex w-full min-w-0 items-center gap-1 md:order-none md:w-auto md:flex-1 md:justify-center">
             {SECTIONS.map((s) => (

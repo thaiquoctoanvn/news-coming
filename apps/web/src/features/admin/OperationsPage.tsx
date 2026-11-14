@@ -10,6 +10,7 @@ import { useEditions } from '../../lib/queries.ts';
 import { useSupabase } from '../../lib/supabase.ts';
 import { AI_TABLE } from './config-tables.ts';
 import { EditableTable } from './EditableTable.tsx';
+import { JobsOperations } from './JobsOperations.tsx';
 import { Maintenance } from './Maintenance.tsx';
 
 const STATUS_COLOR: Readonly<Record<string, 'success' | 'warning' | 'danger' | 'default'>> = {
@@ -31,6 +32,7 @@ export function OperationsPage() {
       <Maintenance />
       <Runs topicId={topicId} />
       <SourceErrors topicId={topicId} />
+      <JobsOperations />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { CalendarPage } from './features/calendar/CalendarPage.tsx';
 import { DigestPage } from './features/digest/DigestPage.tsx';
 import { AdminLayout } from './features/admin/AdminLayout.tsx';
 import { LoginPage } from './features/auth/LoginPage.tsx';
+import { JobsLayout } from './features/jobs/JobsLayout.tsx';
 import { useTopics } from './lib/queries.ts';
 
 function HomeRedirect() {
@@ -49,6 +50,15 @@ export const router = createBrowserRouter([
     children: [
       { index: true, lazy: async () => ({ Component: (await import('./features/admin/OperationsPage.tsx')).OperationsPage }) },
       { path: 'cau-hinh', lazy: async () => ({ Component: (await import('./features/admin/ConfigPage.tsx')).ConfigPage }) },
+    ],
+  },
+  {
+    // Admin-only job board (docs/JOBS_PLAN.md); loaded on demand so the public bundle stays the same.
+    path: '/viec-lam',
+    element: <JobsLayout />,
+    errorElement: <RouteError />,
+    children: [
+      { index: true, lazy: async () => ({ Component: (await import('./features/jobs/JobsPage.tsx')).JobsPage }) },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },
