@@ -2,11 +2,16 @@ import { parseArgs } from 'node:util';
 import { type Env, loadEnv } from './env.ts';
 import { BROWSER_USER_AGENT, fetchText } from './http.ts';
 import { errorMessage, log } from './log.ts';
+import { createPageReader } from './jobs/page-reader.ts';
+import { runJobs } from './jobs/run.ts';
+import { JOB_ADAPTERS } from './jobs/sources/index.ts';
+import { createSupabaseJobStore } from './jobs/supabase-job-store.ts';
+import { jobUsageStore } from './jobs/usage.ts';
 import { runDataModules } from './modules/run-modules.ts';
 import type { ModuleContext } from './modules/types.ts';
 import { collectTopic } from './pipeline/collect.ts';
 import { runEdition } from './pipeline/edition.ts';
-import { type ApiKeys, callProvider, hasKey } from './shared.ts';
+import { AiRouter, type ApiKeys, callProvider, hasKey } from './shared.ts';
 import { fetchSource } from './sources/index.ts';
 import { createSupabaseEditionStore } from './shared.ts';
 import { createSupabaseModuleStore } from './store/supabase-module-store.ts';
@@ -19,6 +24,7 @@ import type { RunTrigger } from './types.ts';
 //   node src/index.ts modules   [--topic <id>|all]        (prices, yields, calendar only)
 //   node src/index.ts catch-up                            (runs editions that are due but did not run today)
 //   node src/index.ts verify-ai                           (one tiny request per enabled AI provider)
+//   node src/index.ts jobs      [--trigger manual|schedule]   (Android / mobile job scan, docs/JOBS_PLAN.md)
 
 const TRIGGERS: readonly RunTrigger[] = ['schedule', 'manual', 'backup'];
 
@@ -57,8 +63,10 @@ async function main(): Promise<void> {
       return catchUp(env);
     case 'verify-ai':
       return verifyAi(env);
+    case 'jobs':
+      return jobs(env, trigger === 'schedule' ? 'schedule' : 'manual');
     default:
-      throw new Error(`Unknown command "${positionals[0] ?? ''}". Expected: edition, collect, modules, catch-up, verify-ai`);
+      throw new Error(`Unknown command "${positionals[0] ?? ''}". Expected: edition, collect, modules, catch-up, verify-ai, jobs`);
   }
 }
 
@@ -73,6 +81,30 @@ function edition(env: Env, topicId: string, editionId: string, trigger: RunTrigg
     fetchSource: sourceFetcher(env),
     keys: apiKeys(env),
     modules: { store: createSupabaseModuleStore(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY), context: moduleContext(env) },
+  });
+}
+
+// Job scoring is a handful of requests a day; this cap only stops a runaway loop.
+const JOB_AI_REQUESTS_PER_RUN = 20;
+
+async function jobs(env: Env, trigger: 'schedule' | 'manual'): Promise<void> {
+  const editionStore = createSupabaseEditionStore(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  const [topicId] = await createSupabaseStore(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY).listEnabledTopicIds();
+  if (!topicId) throw new Error('jobs needs one enabled topic to account AI usage under');
+  const router = new AiRouter({
+    providers: await editionStore.loadAiProviders(),
+    keys: apiKeys(env),
+    usage: jobUsageStore(editionStore, topicId),
+    topicId,
+    topicDailyCap: JOB_AI_REQUESTS_PER_RUN,
+    onEvent: (message, fields) => log.warn(message, fields),
+  });
+  await runJobs({
+    store: createSupabaseJobStore(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY),
+    reader: createPageReader(),
+    router,
+    adapters: JOB_ADAPTERS,
+    trigger,
   });
 }
 
