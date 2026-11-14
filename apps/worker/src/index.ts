@@ -1,9 +1,10 @@
 import { parseArgs } from 'node:util';
 import { type Env, loadEnv } from './env.ts';
-import { BROWSER_USER_AGENT, fetchText } from './http.ts';
+import { BROWSER_USER_AGENT, fetchText, sleep } from './http.ts';
 import { errorMessage, log } from './log.ts';
 import { createPageReader } from './jobs/page-reader.ts';
 import { runJobs } from './jobs/run.ts';
+import { duckDuckGoSearch, geminiSearch } from './jobs/search/engines.ts';
 import { JOB_ADAPTERS } from './jobs/sources/index.ts';
 import { createSupabaseJobStore } from './jobs/supabase-job-store.ts';
 import { jobUsageStore } from './jobs/usage.ts';
@@ -99,11 +100,20 @@ async function jobs(env: Env, trigger: 'schedule' | 'manual'): Promise<void> {
     topicDailyCap: JOB_AI_REQUESTS_PER_RUN,
     onEvent: (message, fields) => log.warn(message, fields),
   });
+  const store = createSupabaseJobStore(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  const budget = await store.loadSearchBudget();
+  const searchKey = env.GEMINI_SEARCH_API_KEY;
   await runJobs({
-    store: createSupabaseJobStore(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY),
+    store,
     reader: createPageReader(),
     router,
     adapters: JOB_ADAPTERS,
+    engines: {
+      // Paid search needs both the prepaid key and valid budget settings; otherwise only the free route runs.
+      ...(searchKey && budget ? { gemini: (query: string) => geminiSearch(query, searchKey, budget) } : {}),
+      duckDuckGo: (query) => duckDuckGoSearch(query),
+      sleep,
+    },
     trigger,
   });
 }

@@ -56,7 +56,7 @@ workflow `.github/workflows/probe-job-sources.yml`. Mỗi nguồn mới thử m�
 | Bing `?format=rss` | Kết quả rác (bỏ qua `site:`) — không dùng |
 | Gemini tìm Google, key free | 429 trên mọi model Gemini 3.x: tính năng không có trong gói free |
 | Gemini 2.5 | 404: không còn mở cho người dùng mới |
-| Gemini tìm Google, key trả trước (`GEMINI_SEARCH_API_KEY`) | 402 "prepayment credits are depleted" cho tới khi nạp credit — **chưa xác nhận hoạt động** |
+| Gemini tìm Google, key trả trước (`GEMINI_SEARCH_API_KEY`) | Hoạt động sau khi nạp credit (§10): 10 link TopCV cho một truy vấn `site:` |
 
 ## 4. Chi phí tìm kiếm (ngoại lệ đã duyệt của quy tắc zero cost)
 
@@ -175,9 +175,20 @@ Không có giai đoạn chạy song song với routine cũ (routine dừng khi h
 
 ## 9. Việc còn mở
 
-- Nạp 5 USD credit cho project `news-coming-search` (không bật auto-reload), rồi chạy lại
-  `probe-job-search.ts gemini` để xác nhận tìm Google hoạt động và đo chi phí thật mỗi lần gọi.
-- Đơn giá token của model dùng cho tìm kiếm (để điền vào `job_search_budget`).
-- Địa chỉ đúng của TopDev; phần tách link của CareerViet; địa chỉ trang tuyển dụng các công ty còn lại.
+- Adapter cho trang tuyển dụng VNG, Grab, Cake (đã seed nguồn, chưa có code đọc) và các công ty còn lại.
+- Glassdoor: ngày 2026-11-15 Jina cũng bị chặn → chưa có adapter; nguồn đã seed nhưng bị bỏ qua.
+- TopDev: hiện chỉ lấy qua tìm kiếm (`site:topdev.vn/viec-lam`); chưa tìm ra địa chỉ đọc trực tiếp.
+- Indeed: kết quả tìm kiếm chỉ trả trang danh sách, không phải tin cụ thể → chưa lấy được tin.
 - DuckDuckGo: thời gian bị chặn kéo dài bao lâu, và bộ lọc theo thời gian có dùng được không.
-- Free allowance 5.000 lượt tìm có cần số dư dương hay không (tài liệu Google không nói rõ).
+- Cùng một vị trí đăng trên hai trang chỉ được gộp khi tên công ty + vị trí trùng nhau sau khi chuẩn hóa.
+
+## 10. Số đo thực tế của tìm kiếm Gemini (GitHub Actions, 2026-11-15)
+
+- Key trả trước hoạt động sau khi nạp 5 USD (trước đó: HTTP 402).
+- Đơn giá `gemini-3.5-flash-lite` gói trả phí: 0,30 USD / 1 triệu token vào, 2,50 USD / 1 triệu token ra
+  (gồm token suy luận). Lưu trong `app_settings.job_search_budget`, sửa được không cần deploy.
+- Mỗi lần gọi với `maxOutputTokens = 400`: ~45 token vào, ~240 token ra, 2 lượt tìm → khoảng 0,0006 USD.
+  6 truy vấn/ngày ≈ 0,11 USD/tháng và ~360 lượt tìm/tháng (miễn phí tới 5.000).
+- Câu lệnh phải yêu cầu model liệt kê kết quả: nếu chỉ bảo "trả lời done" thì model không tìm kiếm.
+- Chỉ dùng link trong `groundingChunks`; không dùng chữ model viết ra (có thể liệt kê tin không có trong kết quả).
+- Truy vấn chung không kèm `site:` chỉ trả trang danh sách → chỉ dùng truy vấn `site:` cho TopCV, JobsGo, TopDev.

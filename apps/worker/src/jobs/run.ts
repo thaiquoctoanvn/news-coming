@@ -2,6 +2,7 @@ import { errorMessage, log } from '../log.ts';
 import { AiUnavailableError, type AiRouter } from '../shared.ts';
 import { dedupeKey, inScope, normalizeUrl, refreshedText, urlHash, vietnamDate } from './filter.ts';
 import type { PageReader } from './page-reader.ts';
+import { type SearchEngines, discover } from './search/discover.ts';
 import { DEFAULT_PROFILE, SCORE_BATCH, assignTiers, scoreBatch } from './score.ts';
 import type { JobAdapter } from './sources/index.ts';
 import type { FoundJob, JobRunStats, JobStore, JobTrigger, KnownJob, NewJob, SourceStats } from './types.ts';
@@ -16,6 +17,7 @@ export interface JobRunOptions {
   readonly reader: PageReader;
   readonly router: AiRouter;
   readonly adapters: Readonly<Record<string, JobAdapter>>;
+  readonly engines: SearchEngines;
   readonly trigger: JobTrigger;
   readonly now?: () => Date;
 }
@@ -52,15 +54,19 @@ export async function runJobs(options: JobRunOptions): Promise<JobRunStats> {
 async function collect(options: JobRunOptions, now: Date): Promise<{ candidates: Candidate[]; sources: Record<string, SourceStats> }> {
   const sources: Record<string, SourceStats> = {};
   const byHash = new Map<string, Candidate>();
-  for (const source of await options.store.loadSources()) {
+  const add = (jobs: readonly FoundJob[]): void => {
+    for (const job of jobs) {
+      const candidate = toCandidate(job);
+      if (!byHash.has(candidate.urlHash)) byHash.set(candidate.urlHash, candidate);
+    }
+  };
+  const enabled = await options.store.loadSources();
+  for (const source of enabled) {
     const adapter = source.kind === 'direct' ? options.adapters[source.id] : undefined;
     if (!adapter) continue;
     try {
       const found = (await adapter(options.reader, now)).filter((job) => inScope(job, now));
-      for (const job of found) {
-        const candidate = toCandidate(job);
-        if (!byHash.has(candidate.urlHash)) byHash.set(candidate.urlHash, candidate);
-      }
+      add(found);
       sources[source.id] = { found: found.length };
     } catch (error: unknown) {
       // One blocked site must not stop the others.
@@ -68,7 +74,12 @@ async function collect(options: JobRunOptions, now: Date): Promise<{ candidates:
       log.warn('job source failed', { source: source.id, error: errorMessage(error) });
     }
   }
-  return { candidates: [...byHash.values()], sources };
+  // Sites read directly come first, so a posting found both ways keeps its richer listing data.
+  const searched = await discover({
+    store: options.store, engines: options.engines, enabledSourceIds: new Set(enabled.map((source) => source.id)), now,
+  });
+  add(searched.jobs.filter((job) => inScope(job, now)));
+  return { candidates: [...byHash.values()], sources: { ...sources, ...searched.sources } };
 }
 
 function toCandidate(job: FoundJob): Candidate {
@@ -136,13 +147,11 @@ async function refresh(store: JobStore, existing: KnownJob, candidate: Candidate
 }
 
 async function verify(options: JobRunOptions, now: Date): Promise<{ closed: number; unverified: number }> {
-  const sources = await options.store.loadSources();
-  const unreadable = new Set(sources.filter((source) => source.kind !== 'direct').map((source) => source.id));
   const today = vietnamDate(now);
   let closed = 0;
   let unverified = 0;
   for (const job of await options.store.loadPending(MAX_VERIFY_PER_RUN)) {
-    const result = await checkPosting(job, options.reader, today, unreadable);
+    const result = await checkPosting(job, options.reader, today);
     await options.store.saveVerification(job.id, result);
     if (result.verification === 'closed') closed++;
     if (result.verification === 'unverified') unverified++;

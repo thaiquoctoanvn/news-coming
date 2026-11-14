@@ -5,6 +5,9 @@ import { dedupeKey, inLocation, isRecent, matchesKeywords, normalizeUrl, refresh
 import type { PageRead, PageReader } from '../src/jobs/page-reader.ts';
 import { runJobs } from '../src/jobs/run.ts';
 import { assignTiers, buildScoreRequest } from '../src/jobs/score.ts';
+import { type SearchBudget, costOf, refusal } from '../src/jobs/search/budget.ts';
+import { type SearchEngines, discover, toFoundJob } from '../src/jobs/search/discover.ts';
+import { SearchRefusedError, duckDuckGoSearch, geminiSearch } from '../src/jobs/search/engines.ts';
 import { parseCareerViet } from '../src/jobs/sources/careerviet.ts';
 import type { JobAdapter } from '../src/jobs/sources/index.ts';
 import { parseItviec } from '../src/jobs/sources/itviec.ts';
@@ -17,6 +20,7 @@ import { MemoryJobStore } from './helpers/memory-job-store.ts';
 
 const fixture = (name: string): string => readFileSync(join(import.meta.dirname, 'fixtures', 'jobs', name), 'utf8');
 const NOW = new Date('2026-11-14T03:00:00Z');
+const NO_SEARCH: SearchEngines = { duckDuckGo: async () => [], sleep: async () => undefined };
 const OPEN_PAGE = `Senior Android Engineer. ${'We build payment apps with Kotlin and Jetpack Compose. '.repeat(10)}`;
 
 describe('job source parsers', () => {
@@ -124,26 +128,24 @@ function readerFor(pages: Record<string, PageRead>): PageReader {
 
 describe('checkPosting', () => {
   const job = { id: '1', sourceId: 'itviec', url: 'https://itviec.com/it-jobs/a-1', deadline: null };
-  const none = new Set<string>();
 
   test('an open page is verified and its text kept for scoring', async () => {
-    const result = await checkPosting(job, readerFor({ [job.url]: { status: 'ok', text: OPEN_PAGE, prose: null } }), '2026-11-14', none);
+    const result = await checkPosting(job, readerFor({ [job.url]: { status: 'ok', text: OPEN_PAGE, prose: null } }), '2026-11-14');
     expect(result).toMatchObject({ verification: 'verified', note: null });
     expect(result.detailText).toContain('Kotlin');
   });
 
   test('closed markers, missing pages and past deadlines close the job', async () => {
     const expired = { status: 'ok' as const, text: `${OPEN_PAGE} Tin tuyển dụng này đã hết hạn nộp hồ sơ.`, prose: null };
-    expect((await checkPosting(job, readerFor({ [job.url]: expired }), '2026-11-14', none)).verification).toBe('closed');
-    expect((await checkPosting(job, readerFor({ [job.url]: { status: 'gone', note: 'HTTP 404' } }), '2026-11-14', none)).verification).toBe('closed');
-    expect((await checkPosting({ ...job, deadline: '2026-11-13' }, readerFor({}), '2026-11-14', none)).verification).toBe('closed');
+    expect((await checkPosting(job, readerFor({ [job.url]: expired }), '2026-11-14')).verification).toBe('closed');
+    expect((await checkPosting(job, readerFor({ [job.url]: { status: 'gone', note: 'HTTP 404' } }), '2026-11-14')).verification).toBe('closed');
+    expect((await checkPosting({ ...job, deadline: '2026-11-13' }, readerFor({}), '2026-11-14')).verification).toBe('closed');
   });
 
   test('a page that cannot be read stays, marked unverified with the reason', async () => {
-    expect(await checkPosting(job, readerFor({}), '2026-11-14', none)).toEqual({
+    expect(await checkPosting(job, readerFor({}), '2026-11-14')).toEqual({
       verification: 'unverified', note: 'Không đọc được trang (HTTP 403)', detailText: null,
     });
-    expect((await checkPosting(job, readerFor({}), '2026-11-14', new Set(['itviec']))).note).toBe('Trang này chặn truy cập tự động');
   });
 });
 
@@ -199,7 +201,7 @@ describe('runJobs', () => {
       found({ url: 'https://itviec.com/it-jobs/backend-3', title: 'Backend Developer', company: 'Gamma' }),
     ]);
 
-    const stats = await runJobs({ store, reader, router: scoringRouter(), adapters, trigger: 'manual', now: () => NOW });
+    const stats = await runJobs({ store, reader, router: scoringRouter(), adapters, engines: NO_SEARCH, trigger: 'manual', now: () => NOW });
 
     expect(stats).toMatchObject({ found: 2, inserted: 2, unverified: 1, scored: 2 });
     expect(store.jobs.map((job) => [job.title, job.verification, job.tier, job.reportDate])).toEqual([
@@ -211,10 +213,10 @@ describe('runJobs', () => {
 
   test('a second run adds nothing; a repost under a new link keeps one job with the new link', async () => {
     const { store, state, adapters, reader } = setup([found({})]);
-    await runJobs({ store, reader, router: scoringRouter(), adapters, trigger: 'manual', now: () => NOW });
+    await runJobs({ store, reader, router: scoringRouter(), adapters, engines: NO_SEARCH, trigger: 'manual', now: () => NOW });
     state.jobs = [found({ url: 'https://itviec.com/it-jobs/android-dev-acme-9' })];
 
-    const stats = await runJobs({ store, reader, router: scoringRouter(), adapters, trigger: 'manual', now: () => NOW });
+    const stats = await runJobs({ store, reader, router: scoringRouter(), adapters, engines: NO_SEARCH, trigger: 'manual', now: () => NOW });
 
     expect(stats.inserted).toBe(0);
     expect(store.jobs).toHaveLength(1);
@@ -224,11 +226,11 @@ describe('runJobs', () => {
 
   test('a reported job whose salary changed is reported again as an update', async () => {
     const { store, state, adapters, reader } = setup([found({ salary: '20-30 triệu' })]);
-    await runJobs({ store, reader, router: scoringRouter(), adapters, trigger: 'manual', now: () => NOW });
+    await runJobs({ store, reader, router: scoringRouter(), adapters, engines: NO_SEARCH, trigger: 'manual', now: () => NOW });
     state.jobs = [found({ salary: '25-40 triệu' })];
     const nextDay = new Date('2026-11-15T03:00:00Z');
 
-    const stats = await runJobs({ store, reader, router: scoringRouter(), adapters, trigger: 'manual', now: () => nextDay });
+    const stats = await runJobs({ store, reader, router: scoringRouter(), adapters, engines: NO_SEARCH, trigger: 'manual', now: () => nextDay });
 
     expect(stats.updated).toBe(1);
     expect(store.jobs[0]).toMatchObject({ salary: '25-40 triệu', isUpdate: true, reportDate: '2026-11-15' });
@@ -238,11 +240,11 @@ describe('runJobs', () => {
     const { store, adapters, reader } = setup([found({})]);
     const noQuota = { complete: async () => { throw new AiUnavailableError('no provider'); } } as unknown as AiRouter;
 
-    await runJobs({ store, reader, router: noQuota, adapters, trigger: 'schedule', now: () => NOW });
+    await runJobs({ store, reader, router: noQuota, adapters, engines: NO_SEARCH, trigger: 'schedule', now: () => NOW });
     expect(store.runs[0]).toMatchObject({ status: 'partial', error: 'no provider' });
     expect(store.jobs[0]).toMatchObject({ verification: 'verified', reportDate: null });
 
-    await runJobs({ store, reader, router: scoringRouter(), adapters, trigger: 'schedule', now: () => NOW });
+    await runJobs({ store, reader, router: scoringRouter(), adapters, engines: NO_SEARCH, trigger: 'schedule', now: () => NOW });
     expect(store.jobs[0]).toMatchObject({ score: 8, reportDate: '2026-11-14' });
   });
 
@@ -253,10 +255,147 @@ describe('runJobs', () => {
       linkedin: async () => [found({ sourceId: 'linkedin', url: 'https://www.linkedin.com/jobs/view/a-1' })],
     };
 
-    const stats = await runJobs({ store, reader: readerFor({}), router: scoringRouter(), adapters, trigger: 'manual', now: () => NOW });
+    const stats = await runJobs({ store, reader: readerFor({}), router: scoringRouter(), adapters, engines: NO_SEARCH, trigger: 'manual', now: () => NOW });
 
     expect(stats.sources).toEqual({ itviec: { found: 0, error: 'HTTP 403 for itviec.com' }, linkedin: { found: 1 } });
     expect(store.runs[0]?.status).toBe('partial');
     expect(store.jobs).toHaveLength(1);
+  });
+});
+
+describe('paid search budget', () => {
+  const budget: SearchBudget = {
+    model: 'gemini-3.5-flash-lite', max_output_tokens: 400, monthly_stop_usd: 0.8, monthly_search_cap: 4000,
+    free_searches_per_month: 5000, usd_per_1k_searches: 14, usd_per_mtok_in: 0.3, usd_per_mtok_out: 2.5,
+  };
+  const spent = (monthCostUsd: number, todayCostUsd = 0, monthSearches = 0) => ({ monthCostUsd, todayCostUsd, monthSearches });
+
+  test('a call costs its tokens; searches cost only beyond the free monthly allowance', () => {
+    expect(costOf({ searches: 2, tokensIn: 47, tokensOut: 236 }, budget, 0)).toBeCloseTo(0.0006041, 7);
+    expect(costOf({ searches: 2, tokensIn: 0, tokensOut: 0 }, budget, 4999)).toBeCloseTo(0.014, 6);
+  });
+
+  test('stops at the monthly amount, the monthly search count and the day\'s share', () => {
+    expect(refusal(budget, spent(0), '2026-11-15')).toBeNull();
+    expect(refusal(budget, spent(0.8), '2026-11-15')).toBe('đã chạm ngân sách tìm kiếm của tháng');
+    expect(refusal(budget, spent(0.1, 0, 4000), '2026-11-15')).toBe('đã chạm số lượt tìm của tháng');
+    // 0.8 USD over 16 remaining days = 0.05 USD a day.
+    expect(refusal(budget, spent(0.05, 0.05), '2026-11-15')).toBe('đã chạm ngân sách tìm kiếm của hôm nay');
+    expect(refusal(budget, spent(0.04, 0.04), '2026-11-15')).toBeNull();
+  });
+
+  const enabled = new Set(['topcv', 'jobsgo', 'gemini_search', 'duckduckgo']);
+  const TOPCV = 'https://www.topcv.vn/viec-lam/android-developer-kotlin/2318679.html';
+
+  test('only posting pages become jobs, titled from their own URL', () => {
+    expect(toFoundJob(TOPCV, 'gemini_search')).toMatchObject({
+      sourceId: 'topcv', foundVia: 'gemini_search', title: 'Android developer kotlin', company: null, postedAt: null,
+    });
+    expect(toFoundJob('https://www.topcv.vn/tim-viec-lam-android', 'gemini_search')).toBeNull();
+    expect(toFoundJob('https://vn.indeed.com/q-android-jobs.html', 'duckduckgo')).toBeNull();
+  });
+
+  test('within budget every query goes to Gemini and its real cost is recorded', async () => {
+    const store = new MemoryJobStore([]);
+    store.budget = budget;
+    const queries: string[] = [];
+    const engines: SearchEngines = {
+      ...NO_SEARCH,
+      gemini: async (query) => {
+        queries.push(query);
+        return { urls: [TOPCV], usage: { searches: 2, tokensIn: 40, tokensOut: 200 } };
+      },
+    };
+
+    const result = await discover({ store, engines, enabledSourceIds: enabled, now: NOW });
+
+    expect(queries).toHaveLength(4);
+    expect(queries[0]).toBe('site:topcv.vn/viec-lam android developer Hồ Chí Minh');
+    expect(store.spendRecords).toHaveLength(4);
+    expect(store.spendRecords[0]).toMatchObject({ engineId: 'gemini_search', today: '2026-11-14', usage: { searches: 2 } });
+    expect(result.sources).toEqual({ gemini_search: { found: 4 } });
+  });
+
+  test('when the budget is used up, or Gemini refuses, DuckDuckGo serves at most three queries', async () => {
+    const store = new MemoryJobStore([]);
+    store.budget = budget;
+    store.spend = spent(0.8);
+    let paidCalls = 0;
+    let freeCalls = 0;
+    const engines: SearchEngines = {
+      gemini: async () => { paidCalls++; return { urls: [], usage: { searches: 0, tokensIn: 0, tokensOut: 0 } }; },
+      duckDuckGo: async () => { freeCalls++; return [TOPCV]; },
+      sleep: async () => undefined,
+    };
+
+    const exhausted = await discover({ store, engines, enabledSourceIds: enabled, now: NOW });
+    expect([paidCalls, freeCalls]).toEqual([0, 3]);
+    expect(exhausted.sources).toEqual({
+      gemini_search: { found: 0, error: 'đã chạm ngân sách tìm kiếm của tháng' },
+      duckduckgo: { found: 3 },
+    });
+
+    store.spend = spent(0);
+    freeCalls = 0;
+    const refusing: SearchEngines = { ...engines, gemini: async () => { paidCalls++; throw new SearchRefusedError('Gemini search HTTP 402'); } };
+    const refused = await discover({ store, engines: refusing, enabledSourceIds: enabled, now: NOW });
+    expect([paidCalls, freeCalls]).toEqual([1, 3]);
+    expect(refused.sources.gemini_search).toEqual({ found: 0, error: 'Gemini search HTTP 402' });
+    expect(store.spendRecords).toHaveLength(0);
+  });
+
+  test('without a key or budget settings only the free route runs', async () => {
+    const store = new MemoryJobStore([]);
+    let freeCalls = 0;
+    const result = await discover({
+      store, engines: { ...NO_SEARCH, duckDuckGo: async () => { freeCalls++; return []; } }, enabledSourceIds: enabled, now: NOW,
+    });
+    expect(freeCalls).toBe(3);
+    expect(result.sources).toEqual({});
+  });
+});
+
+describe('search engines', () => {
+  const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status });
+  const budget: SearchBudget = {
+    model: 'gemini-3.5-flash-lite', max_output_tokens: 400, monthly_stop_usd: 0.8, monthly_search_cap: 4000,
+    free_searches_per_month: 5000, usd_per_1k_searches: 14, usd_per_mtok_in: 0.3, usd_per_mtok_out: 2.5,
+  };
+
+  test('Gemini: links come from the search results only, redirects are resolved, usage is counted', async () => {
+    const bodies: string[] = [];
+    const fetchImpl = async (url: string, init?: RequestInit): Promise<Response> => {
+      if (url.includes('generativelanguage')) {
+        bodies.push(String(init?.body));
+        return json({
+          candidates: [{
+            content: { parts: [{ text: 'Fake Job | https://invented.example/job' }] },
+            groundingMetadata: {
+              webSearchQueries: ['a', 'b'],
+              groundingChunks: [{ web: { uri: 'https://redirect.example/1', title: 'topcv.vn' } }, { web: { uri: 'https://redirect.example/1' } }],
+            },
+          }],
+          usageMetadata: { promptTokenCount: 47, candidatesTokenCount: 236, thoughtsTokenCount: 10 },
+        });
+      }
+      return new Response(null, { status: 302, headers: { location: 'https://www.topcv.vn/viec-lam/android-dev/1.html' } });
+    };
+
+    const result = await geminiSearch('site:topcv.vn android', 'key-1234567890', budget, fetchImpl);
+
+    expect(result.urls).toEqual(['https://www.topcv.vn/viec-lam/android-dev/1.html']);
+    expect(result.usage).toEqual({ searches: 2, tokensIn: 47, tokensOut: 246 });
+    expect(JSON.parse(bodies[0] ?? '{}')).toMatchObject({ tools: [{ google_search: {} }], generationConfig: { maxOutputTokens: 400 } });
+  });
+
+  test('Gemini: no credit or quota is a refusal', async () => {
+    await expect(geminiSearch('q', 'key-1234567890', budget, async () => json({ error: {} }, 402))).rejects.toBeInstanceOf(SearchRefusedError);
+  });
+
+  test('DuckDuckGo: result links without ads; its rate-limit page is a refusal', async () => {
+    const html = '<a href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.topcv.vn%2Fviec-lam%2Fa%2F1.html&amp;rut=x">A</a>'
+      + '<a href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fduckduckgo.com%2Fy.js%3Fad_domain%3Dx&amp;rut=y">Ad</a>';
+    expect(await duckDuckGoSearch('q', async () => new Response(html))).toEqual(['https://www.topcv.vn/viec-lam/a/1.html']);
+    await expect(duckDuckGoSearch('q', async () => new Response('', { status: 202 }))).rejects.toBeInstanceOf(SearchRefusedError);
   });
 });

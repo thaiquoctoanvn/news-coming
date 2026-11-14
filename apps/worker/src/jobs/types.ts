@@ -1,3 +1,5 @@
+import type { SearchBudget, SearchSpend, SearchUsage } from './search/budget.ts';
+
 // Job board pipeline (docs/JOBS_PLAN.md): Android / mobile postings for the admin only.
 
 export type JobSourceKind = 'direct' | 'listing_only' | 'search_only' | 'engine';
@@ -113,6 +115,11 @@ export interface JobRunStats {
 }
 
 export interface JobStore {
+  /** Settings of the paid web search; null when missing or invalid (then it is not used). */
+  loadSearchBudget(): Promise<SearchBudget | null>;
+  /** Spend of one engine in the month of `today` (UTC) and on that day. */
+  loadSearchSpend(engineId: string, today: string): Promise<SearchSpend>;
+  recordSearchSpend(engineId: string, today: string, usage: SearchUsage, costUsd: number): Promise<void>;
   loadSources(): Promise<JobSource[]>;
   /** The admin's scoring profile (skills and experience), or null when not set yet. */
   loadProfile(): Promise<string | null>;

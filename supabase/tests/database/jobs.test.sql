@@ -1,7 +1,7 @@
 -- Job board access contract (docs/JOBS_PLAN.md §5). Run with: supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(15);
+select plan(16);
 
 insert into public.jobs (source_id, url, url_hash, title, verification, score, tier, report_date)
 values ('itviec', 'https://example.com/job-1', 'job-1', 'Android Developer', 'verified', 8, 'fit', current_date);
@@ -13,6 +13,12 @@ select results_eq(
   $$ select calls, searches, tokens_in::int, tokens_out::int, cost_usd from public.search_spend $$,
   $$ values (2, 3, 100, 2000, 0.002000::numeric(12, 6)) $$,
   'search spend adds up per engine and day'
+);
+
+select results_eq(
+  $$ select (value->>'monthly_stop_usd')::numeric < 1 from public.app_settings where key = 'job_search_budget' $$,
+  $$ values (true) $$,
+  'paid search stops below 1 USD a month'
 );
 
 -- ===== Public visitor =====
