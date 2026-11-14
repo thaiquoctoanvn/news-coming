@@ -7,6 +7,7 @@ import { fetchJobDates, fetchJobRuns, fetchJobSources, fetchJobs, fetchSearchSta
 import { useSupabase } from '../../lib/supabase.ts';
 import { DigestDatePicker } from '../digest/DigestDatePicker.tsx';
 import { JobCard } from './JobCard.tsx';
+import { ScanJobsButton } from './ScanJobsButton.tsx';
 import { TIER_LABEL, creditStatus, groupJobs, highScoreCount } from './job-view.ts';
 
 const FIVE_MINUTES = 5 * 60_000;
@@ -31,7 +32,12 @@ export function JobsPage() {
   if (dates.isPending) return <LoadingCards />;
   if (dates.isError) return <ErrorState title="Không tải được tin việc làm" error={dates.error} onRetry={() => void dates.refetch()} />;
   if (!date) {
-    return <EmptyState title="Chưa có báo cáo việc làm nào">Lần quét đầu tiên chạy lúc 07:45 sáng, hoặc chạy tay ở GitHub Actions → Scan jobs.</EmptyState>;
+    return (
+      <div className="flex flex-col items-center gap-4">
+        <EmptyState title="Chưa có báo cáo việc làm nào">Lần quét tự động chạy lúc 07:45 mỗi sáng.</EmptyState>
+        <ScanJobsButton />
+      </div>
+    );
   }
 
   const index = dates.data.indexOf(date);
@@ -45,10 +51,13 @@ export function JobsPage() {
     <div className="flex flex-col gap-6">
       {credit?.warning && <p role="alert" className="rounded-xl border border-warning bg-warning/10 px-4 py-3 text-sm">{credit.warning}</p>}
 
-      <section aria-label="Chọn ngày" className="flex min-w-0 items-center gap-2">
-        <Button isIconOnly size="sm" variant="ghost" aria-label="Ngày trước" isDisabled={!older} onPress={() => older && setParams({ date: older })}>‹</Button>
-        <DigestDatePicker date={date} availableDates={dates.data} label={formatDigestDate(date)} onSelect={(next) => setParams({ date: next })} />
-        <Button isIconOnly size="sm" variant="ghost" aria-label="Ngày sau" isDisabled={!newer} onPress={() => newer && setParams({ date: newer })}>›</Button>
+      <section aria-label="Chọn ngày" className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Button isIconOnly size="sm" variant="ghost" aria-label="Ngày trước" isDisabled={!older} onPress={() => older && setParams({ date: older })}>‹</Button>
+          <DigestDatePicker date={date} availableDates={dates.data} label={formatDigestDate(date)} onSelect={(next) => setParams({ date: next })} />
+          <Button isIconOnly size="sm" variant="ghost" aria-label="Ngày sau" isDisabled={!newer} onPress={() => newer && setParams({ date: newer })}>›</Button>
+        </div>
+        <ScanJobsButton />
       </section>
 
       {jobs.isPending && <LoadingCards />}

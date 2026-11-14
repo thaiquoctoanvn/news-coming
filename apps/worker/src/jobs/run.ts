@@ -25,6 +25,9 @@ export interface JobRunOptions {
 const MAX_VERIFY_PER_RUN = 80;
 const MAX_SCORE_PER_RUN = 60;
 const REPOSTED = 'đăng lại nhiều lần';
+// A job that is still listed is shown again after this many days, so a long-running opening is not missed.
+const REMIND_AFTER_DAYS = 14;
+const DAY_MS = 86_400_000;
 
 type Candidate = NewJob;
 
@@ -133,17 +136,25 @@ async function refresh(store: JobStore, existing: KnownJob, candidate: Candidate
   const reposted = existing.urlHash !== candidate.urlHash;
   const changed = (before: string | null, after: string | null): boolean => before !== null && after !== null && before !== after;
   const termsChanged = changed(existing.salary, candidate.salary) || changed(existing.deadline, candidate.deadline);
-  if (!reposted && !termsChanged) return false;
+  const today = vietnamDate(now);
+  const remind = existing.reportDate !== null && daysBetween(existing.reportDate, today) >= REMIND_AFTER_DAYS;
+  if (!reposted && !termsChanged && !remind) return false;
   const posted = candidate.postedText ?? existing.postedText;
+  const repostedText = posted?.includes(REPOSTED) ? posted : [posted, REPOSTED].filter(Boolean).join(' · ');
+  // Only a job that was already shown is shown again, tagged "Cập nhật"; its score is kept.
+  const showAgain = existing.reportDate !== null && (termsChanged || remind);
   await store.updateJob(existing.id, {
     // A position posted again under a new link: keep one job and point it at the newest link.
-    ...(reposted ? { url: candidate.url, urlHash: candidate.urlHash } : {}),
-    ...(reposted ? { postedText: posted?.includes(REPOSTED) ? posted : [posted, REPOSTED].filter(Boolean).join(' · ') } : {}),
+    ...(reposted ? { url: candidate.url, urlHash: candidate.urlHash, postedText: repostedText } : {}),
+    ...(!reposted && remind && candidate.postedText ? { postedText: candidate.postedText } : {}),
     ...(termsChanged ? { salary: candidate.salary ?? existing.salary, deadline: candidate.deadline ?? existing.deadline } : {}),
-    // Only a job that was already shown is shown again as "cập nhật".
-    ...(termsChanged && existing.reportDate ? { isUpdate: true, reportDate: vietnamDate(now) } : {}),
+    ...(showAgain ? { isUpdate: true, reportDate: today } : {}),
   });
-  return termsChanged;
+  return showAgain;
+}
+
+function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
 }
 
 async function verify(options: JobRunOptions, now: Date): Promise<{ closed: number; unverified: number }> {

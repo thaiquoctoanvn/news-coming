@@ -1,8 +1,13 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, test } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, test, vi } from 'vitest';
 import type { Job, SearchStatus } from '../../lib/jobs-api.ts';
 import { afterLoginPath } from '../auth/LoginPage.tsx';
+import { SupabaseContext } from '../../lib/supabase.ts';
 import { JobCard } from './JobCard.tsx';
+import { ScanJobsButton } from './ScanJobsButton.tsx';
 import { creditStatus, formatDeadline, groupJobs, highScoreCount } from './job-view.ts';
 
 const job: Job = {
@@ -74,5 +79,54 @@ describe('job view helpers', () => {
     expect(afterLoginPath('//evil.example')).toBe('/quan-tri');
     expect(afterLoginPath('https://evil.example')).toBe('/quan-tri');
     expect(afterLoginPath(null)).toBe('/quan-tri');
+  });
+});
+
+describe('ScanJobsButton', () => {
+  /** A Supabase stub: every table query resolves to `rows`; the Edge Function call is recorded. */
+  function setup(rows: Record<string, unknown[]>) {
+    const invoke = vi.fn(async () => ({ data: { message: 'Đã gửi yêu cầu quét.' }, error: null }));
+    const query = (table: string) => {
+      const result = { data: rows[table] ?? [], error: null };
+      const chain: Record<string, unknown> = {
+        select: () => chain, eq: () => chain, gte: () => chain,
+        maybeSingle: async () => ({ data: (rows[table] ?? [])[0] ?? null, error: null }),
+        then: (resolve: (value: typeof result) => unknown) => Promise.resolve(result).then(resolve),
+      };
+      return chain;
+    };
+    const db = { from: query, functions: { invoke } } as unknown as SupabaseClient;
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <SupabaseContext.Provider value={db}><ScanJobsButton /></SupabaseContext.Provider>
+      </QueryClientProvider>,
+    );
+    return { invoke };
+  }
+
+  test('nothing is sent until the warning is confirmed with OK', async () => {
+    const user = userEvent.setup();
+    const { invoke } = setup({ action_quota: [{ count: 1 }] });
+
+    await user.click(await screen.findByRole('button', { name: 'Quét ngay' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('5–15 phút');
+    expect(dialog).toHaveTextContent('dùng chung hạn mức AI miễn phí');
+    expect(await screen.findByText(/Hôm nay còn/)).toHaveTextContent('Hôm nay còn 2 / 3 lượt quét tay');
+    expect(invoke).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Hủy' }));
+    expect(invoke).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Quét ngay' }));
+    await user.click(await screen.findByRole('button', { name: 'OK' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Đã gửi yêu cầu quét.');
+    expect(invoke).toHaveBeenCalledWith('trigger-jobs', { body: {} });
+  });
+
+  test('the button is disabled once today\'s presses are used up', async () => {
+    setup({ action_quota: [{ count: 3 }] });
+    expect(await screen.findByText('Đã dùng hết 3 lượt quét hôm nay.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Quét ngay' })).toBeDisabled();
   });
 });

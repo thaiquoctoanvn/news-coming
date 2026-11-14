@@ -9,6 +9,7 @@ import { type SearchBudget, costOf, refusal } from '../src/jobs/search/budget.ts
 import { type SearchEngines, discover, toFoundJob } from '../src/jobs/search/discover.ts';
 import { SearchRefusedError, duckDuckGoSearch, geminiSearch } from '../src/jobs/search/engines.ts';
 import { parseCareerViet } from '../src/jobs/sources/careerviet.ts';
+import { parseCake, parseGrab, parseVng } from '../src/jobs/sources/company-pages.ts';
 import type { JobAdapter } from '../src/jobs/sources/index.ts';
 import { parseItviec } from '../src/jobs/sources/itviec.ts';
 import { parseLinkedIn } from '../src/jobs/sources/linkedin.ts';
@@ -90,6 +91,42 @@ describe('job source parsers', () => {
       deadline: '2026-11-18',
     });
     expect(last?.postedAt?.toISOString()).toBe('2026-10-18T17:00:00.000Z');
+  });
+});
+
+describe('company career pages', () => {
+  test('VNG: open roles embedded in the page, with their text and the page count', () => {
+    const { jobs, pages } = parseVng(fixture('vng.html'));
+
+    expect(pages).toBe(7);
+    expect(jobs.map((job) => job.title)).toEqual(['Technical Product Manager, Business Operations', 'Data Engineer, VNGGames']);
+    expect(jobs[1]).toMatchObject({
+      sourceId: 'vng', company: 'VNG', location: 'Thành phố Hồ Chí Minh',
+      url: 'https://career.vng.com.vn/tim-kiem-viec-lam/chi-tiet/6943-data-engineer-vnggames-vi',
+    });
+    expect(jobs[1]?.detailText).toBeTruthy();
+    expect(() => parseVng('<html></html>')).toThrow('no embedded job data');
+  });
+
+  test('Grab: search result cards with location', () => {
+    const jobs = parseGrab(fixture('grab.html'));
+
+    expect(jobs).toHaveLength(2);
+    expect(jobs[0]).toMatchObject({
+      sourceId: 'grab', company: 'Grab', title: 'Senior Software Engineer, Mobile (Android)', location: 'HCMC, Vietnam',
+      url: 'https://www.grab.careers/en/jobs/744000127795765/senior-software-engineer-mobile-android/',
+    });
+    expect(inLocation(jobs[0]?.location ?? null)).toBe(true);
+  });
+
+  test('Cake: roles with office codes; unclear codes stay unknown', () => {
+    const jobs = parseCake(fixture('cake.html'));
+
+    expect(jobs.map((job) => [job.title, job.location])).toEqual([
+      ['CV/CVC Thu Hồi Nợ Qua Điện Thoại', 'Hà Nội'],
+      ['Backend Engineer (Senior/Staff/Principal role)', null],
+    ]);
+    expect(jobs[1]?.url).toBe('https://cake.vn/tuyen-dung/jobs/Backend-Engineer');
   });
 });
 
@@ -234,6 +271,20 @@ describe('runJobs', () => {
 
     expect(stats.updated).toBe(1);
     expect(store.jobs[0]).toMatchObject({ salary: '25-40 triệu', isUpdate: true, reportDate: '2026-11-15' });
+  });
+
+  test('a job still listed two weeks after it was shown is shown again as an update, with its score kept', async () => {
+    const { store, adapters, reader } = setup([found({})]);
+    const run = (now: Date) => runJobs({ store, reader, router: scoringRouter(), adapters, engines: NO_SEARCH, trigger: 'manual', now: () => now });
+    await run(NOW);
+
+    const soon = await run(new Date('2026-11-27T03:00:00Z'));
+    expect(soon.updated).toBe(0);
+    expect(store.jobs[0]).toMatchObject({ reportDate: '2026-11-14', isUpdate: false });
+
+    const later = await run(new Date('2026-11-28T03:00:00Z'));
+    expect(later).toMatchObject({ updated: 1, inserted: 0, scored: 0 });
+    expect(store.jobs[0]).toMatchObject({ reportDate: '2026-11-28', isUpdate: true, score: 8, tier: 'top' });
   });
 
   test('when AI quota runs out the run is partial and unscored jobs wait for the next run', async () => {

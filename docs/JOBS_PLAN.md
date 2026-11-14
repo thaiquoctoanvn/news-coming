@@ -25,6 +25,10 @@ Routine cũ **không** gửi email; pipeline mới cũng không gửi email hay 
 | Tin đã báo trước đây | Không nhập lịch sử từ routine cũ; ngày chạy đầu hiển thị lại tất cả |
 | Tìm kiếm | Gemini "Grounding with Google Search" (trả trước), trần **1 USD/tháng**; hết ngân sách hoặc lỗi → dự phòng miễn phí (DuckDuckGo) |
 | Nhắc sắp hết credit | Chỉ hiển thị trên giao diện |
+| Tin đã báo vẫn còn trên nguồn | Nhắc lại sau 14 ngày kể từ lần báo gần nhất, tag "Cập nhật", giữ điểm cũ (không chấm lại). Tin chỉ được làm mới trong vòng 14 ngày thì im lặng (chốt 2026-11-15) |
+| Giữ tin | 30 ngày kể từ lần cuối còn thấy trên nguồn (chỉnh được, tối thiểu 21); tin đã đóng 30 ngày; nội dung trang tin 7 ngày sau khi báo |
+| Nút "Quét ngay" | Có hộp cảnh báo, chỉ chạy khi bấm OK; tối đa 3 lượt/ngày, chặn ở Edge Function `trigger-jobs` |
+| Trang tuyển dụng công ty | Thử Gemini trước; không ra thì viết code đọc riêng (kết quả: phải viết riêng, xem §9) |
 
 ## 3. Kết quả thử nghiệm (nhánh `spike/job-sources`, chạy trên GitHub Actions 2026-11-14)
 
@@ -176,12 +180,26 @@ Không có giai đoạn chạy song song với routine cũ (routine dừng khi h
 
 ## 9. Việc còn mở
 
-- Adapter cho trang tuyển dụng VNG, Grab, Cake (đã seed nguồn, chưa có code đọc) và các công ty còn lại.
-- Glassdoor: ngày 2026-11-15 Jina cũng bị chặn → chưa có adapter; nguồn đã seed nhưng bị bỏ qua.
-- TopDev: hiện chỉ lấy qua tìm kiếm (`site:topdev.vn/viec-lam`); chưa tìm ra địa chỉ đọc trực tiếp.
+- Glassdoor: chặn cả đọc trực tiếp lẫn Jina, và Gemini tìm `site:glassdoor.com/job-listing` trả về rỗng (2026-11-15) → chưa có cách lấy; nguồn đã seed nhưng bị bỏ qua.
 - Indeed: kết quả tìm kiếm chỉ trả trang danh sách, không phải tin cụ thể → chưa lấy được tin.
+- TopDev: chỉ lấy qua tìm kiếm (`site:topdev.vn/viec-lam`); chưa tìm ra địa chỉ đọc trực tiếp.
+- Trang tuyển dụng các công ty khác (MoMo, Be, Tiki, KMS, NAB, Axon Active, Employment Hero, Katalon, Trusting Social, ELSA, Go Labs, Uplive): chưa có code đọc.
 - DuckDuckGo: thời gian bị chặn kéo dài bao lâu, và bộ lọc theo thời gian có dùng được không.
 - Cùng một vị trí đăng trên hai trang chỉ được gộp khi tên công ty + vị trí trùng nhau sau khi chuẩn hóa.
+
+### Trang công ty đã có code đọc (2026-11-15)
+
+Gemini + Google Search **không** tìm ra tin trên `career.vng.com.vn`, `grab.careers`, `cake.vn` (trả lời rỗng, không có
+kết quả tìm kiếm; truy vấn TopCV đối chứng trong cùng lần chạy vẫn ra 9–10 link), nên ba trang có parser riêng trong
+`apps/worker/src/jobs/sources/company-pages.ts`:
+
+| Trang | Cách đọc |
+|---|---|
+| VNG | Trang Next.js nhúng danh sách việc trong `__NEXT_DATA__` (kèm mô tả). Tìm theo từ khóa bị bỏ qua ở server → đọc hết các trang `?page=N` (khoảng 7 trang) rồi lọc tiêu đề. Link tin: `/tim-kiem-viec-lam/chi-tiet/<slug>` |
+| Grab | Kết quả tìm kiếm render sẵn: `/en/jobs/?search=android&country=Vietnam` và `search=mobile` |
+| Cake | Danh sách render sẵn ở `/tuyen-dung/jobs`. Mã văn phòng "HN" = Hà Nội; mã không rõ ("HO") để trống địa điểm |
+
+Các trang này không có ngày đăng, nên tin được báo một lần rồi nhắc lại mỗi 14 ngày khi còn mở.
 
 ## 10. Số đo thực tế của tìm kiếm Gemini (GitHub Actions, 2026-11-15)
 
