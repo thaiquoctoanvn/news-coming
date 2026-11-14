@@ -1,8 +1,8 @@
 # Kế hoạch: trang tin việc làm Android / Mobile
 
-> Trạng thái: **đã duyệt thiết kế, chưa code** (2026-11-15).
-> Tài liệu này để bất kỳ agent nào cũng làm tiếp được. Khi một phần đã làm xong, chuyển nội dung
-> tương ứng vào `docs/DESIGN.md` và xóa khỏi đây.
+> Trạng thái (2026-11-15): **đã làm xong 4 bước đầu** (PR #17 database, #18 worker, #19 tìm kiếm, #20 web).
+> Tóm tắt thiết kế đã chuyển vào `docs/DESIGN.md` §17; tài liệu này giữ lại lý do của các quyết định,
+> kết quả thử nguồn và danh sách việc còn mở (§9).
 
 ## 1. Bối cảnh
 

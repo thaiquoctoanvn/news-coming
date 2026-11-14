@@ -559,6 +559,7 @@ Secret runtime của Edge Functions (`ADMIN_EMAIL`, API key AI…) đặt một 
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | GitHub Secrets |
 | `GROQ_API_KEY`, `GEMINI_API_KEY`, `CEREBRAS_API_KEY`, `CF_ACCOUNT_ID`, `CF_API_TOKEN` | GitHub Secrets + Supabase Secrets (cho `more-news`) |
 | `FRED_API_KEY`, `EIA_API_KEY`, `SEC_USER_AGENT` | GitHub Secrets |
+| `GEMINI_SEARCH_API_KEY` (key trả trước của project Google riêng, chỉ cho tìm kiếm việc làm — §17) | GitHub Secrets |
 | `ADMIN_USERNAME`, `ADMIN_EMAIL` | Supabase Secrets |
 | `GITHUB_DISPATCH_TOKEN` (fine-grained, chỉ quyền Actions của repo này) | Supabase Vault (pg_net) + Supabase Secrets (`trigger-refresh`) |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | Netlify env (public, an toàn nhờ RLS) |
@@ -593,3 +594,24 @@ Secret runtime của Edge Functions (`ADMIN_EMAIL`, API key AI…) đặt một 
 | Bot đốt quota qua nút bấm | Nút chỉ cho admin + giới hạn lượt/ngày theo topic |
 | Deploy lỗi giữa chừng / migration hỏng | Thứ tự DB → Functions → Web → Worker; worker chạy theo tag `prod`; CI chạy migration trên Postgres local trước |
 | Hết credit Netlify do deploy nhiều | Tắt auto build + deploy preview; chỉ deploy web khi `apps/web` đổi; công tắc `WEB_DEPLOY_ENABLED` |
+
+---
+
+## 17. Trang tin việc làm (chỉ admin)
+
+Khu vực thứ hai của trang, tách hẳn khỏi bảng tin tài chính và **không** phải một topic. Chi tiết quyết định,
+kết quả thử nguồn và việc còn mở: `docs/JOBS_PLAN.md`.
+
+| Phần | Nơi |
+|---|---|
+| Bảng `job_sources`, `jobs`, `job_runs`, `search_spend`; hàm `record_search_spend`, `purge_old_jobs` (pg_cron 20:10 UTC) | `supabase/migrations/20261115000100_jobs.sql`, `…000200_job_search.sql` |
+| Pipeline (lệnh `node src/index.ts jobs`) | `apps/worker/src/jobs/` |
+| Lịch chạy 07:45 VN + chạy tay | `.github/workflows/jobs.yml` (từ tag `prod`) |
+| Trang `/viec-lam`, nút chuyển khu vực ở header, khối "Việc làm" ở trang Vận hành | `apps/web/src/features/jobs/`, `components/AreaSwitch.tsx`, `features/admin/JobsOperations.tsx` |
+
+- **Quyền:** `anon` không có grant nào trên 4 bảng; admin chỉ đọc (và bật/tắt `job_sources.enabled`); worker ghi bằng service_role. Test: `supabase/tests/database/jobs.test.sql`.
+- **Pipeline:** đọc nguồn trực tiếp (ITviec qua Jina, VietnamWorks API, LinkedIn, CareerViet) → tìm kiếm cho trang bị chặn (TopCV, JobsGo, TopDev) → lọc bằng code (tiêu đề có `android`/`mobile`, Hồ Chí Minh hoặc remote, làm mới trong 14 ngày) → chống trùng (link, công ty + vị trí) → xác minh trên trang chi tiết (hết hạn thì ẩn, không đọc được thì giữ ở nhóm "Chưa xác minh") → chấm điểm 1–10 bằng router AI free (4 tin/request, ghi `ai_usage` dưới topic đang bật đầu tiên) → xếp nhóm. Mỗi bước lưu trạng thái nên lần chạy sau làm nốt phần dở.
+- **Hồ sơ chấm điểm** (`app_settings.job_profile`) chỉ dùng để chấm điểm, không bao giờ loại tin. Không nằm trong repo.
+- **Tìm kiếm trả phí:** ngoại lệ duy nhất của quy tắc zero cost (`.agents/rules/cost.md` §2a). Gemini + Google Search trên key trả trước; worker tự chặn ở 0,80 USD hoặc 4.000 lượt tìm mỗi tháng (`app_settings.job_search_budget`, `jobs/search/budget.ts`), hết ngân sách hoặc lỗi thì dùng DuckDuckGo (≤ 3 truy vấn/lần chạy). Chỉ dùng link trong kết quả tìm kiếm, không dùng chữ model viết.
+- **Hạn mức thêm vào dịch vụ free:** Jina ~10–40 request/ngày (giãn ≥ 3,1 giây, chạy lúc 07:45 sau bản tin sáng); Groq ~2–15 request chấm điểm/ngày (trần 20 request mỗi lần chạy).
+
