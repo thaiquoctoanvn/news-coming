@@ -1,3 +1,4 @@
+import type { SearchBudget, SearchSpend, SearchUsage } from '../../src/jobs/search/budget.ts';
 import type {
   JobPatch, JobRunStats, JobScore, JobSource, JobStore, JobTier, KnownJob, NewJob, PendingJob,
   ReportedJob, UnscoredJob, VerificationResult,
@@ -20,6 +21,9 @@ export class MemoryJobStore implements JobStore {
   jobs: MemoryJob[] = [];
   runs: Array<{ id: string; status: string; stats: JobRunStats | null; error: string | null }> = [];
   profile: string | null = null;
+  budget: SearchBudget | null = null;
+  spend: SearchSpend = { monthCostUsd: 0, monthSearches: 0, todayCostUsd: 0 };
+  spendRecords: Array<{ engineId: string; today: string; usage: SearchUsage; costUsd: number }> = [];
   private readonly sources: JobSource[];
 
   constructor(sources: JobSource[]) {
@@ -32,6 +36,18 @@ export class MemoryJobStore implements JobStore {
 
   async loadProfile(): Promise<string | null> {
     return this.profile;
+  }
+
+  async loadSearchBudget(): Promise<SearchBudget | null> {
+    return this.budget;
+  }
+
+  async loadSearchSpend(): Promise<SearchSpend> {
+    return this.spend;
+  }
+
+  async recordSearchSpend(engineId: string, today: string, usage: SearchUsage, costUsd: number): Promise<void> {
+    this.spendRecords.push({ engineId, today, usage, costUsd });
   }
 
   async startRun(): Promise<string> {

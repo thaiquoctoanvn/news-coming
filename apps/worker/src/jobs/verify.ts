@@ -9,13 +9,8 @@ const MAX_DETAIL_CHARS = 4_000;
 // words like "expired" alone also appear in scripts and footers of open postings.
 const CLOSED = /đã hết hạn nộp|tin (?:tuyển dụng )?(?:này )?đã hết hạn|việc làm (?:này )?đã hết hạn|ngừng nhận hồ sơ|tin đã đóng|no longer accepting applications|this job (?:has expired|is closed|is no longer available)|job (?:has )?expired/i;
 
-export async function checkPosting(
-  job: PendingJob, reader: PageReader, today: string, unreadableSources: ReadonlySet<string>,
-): Promise<VerificationResult> {
+export async function checkPosting(job: PendingJob, reader: PageReader, today: string): Promise<VerificationResult> {
   if (job.deadline && job.deadline < today) return { verification: 'closed', note: 'Quá hạn nộp hồ sơ', detailText: null };
-  if (unreadableSources.has(job.sourceId)) {
-    return { verification: 'unverified', note: 'Trang này chặn truy cập tự động', detailText: null };
-  }
   const page = await reader.readPosting(job.url);
   if (page.status === 'gone') return { verification: 'closed', note: `Tin không còn (${page.note})`, detailText: null };
   if (page.status === 'blocked') {

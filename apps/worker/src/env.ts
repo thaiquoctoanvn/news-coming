@@ -11,6 +11,8 @@ const envSchema = z.object({
     .optional(),
   GROQ_API_KEY: z.string().min(10).optional(),
   GEMINI_API_KEY: z.string().min(10).optional(),
+  // Prepaid key of a separate Google project, used only for the job board's web search (docs/JOBS_PLAN.md §4).
+  GEMINI_SEARCH_API_KEY: z.string().min(10).optional(),
   FRED_API_KEY: z.string().min(10).optional(),
   EIA_API_KEY: z.string().min(10).optional(),
 });
@@ -24,6 +26,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     SEC_USER_AGENT: source.SEC_USER_AGENT || undefined,
     GROQ_API_KEY: source.GROQ_API_KEY || undefined,
     GEMINI_API_KEY: source.GEMINI_API_KEY || undefined,
+    GEMINI_SEARCH_API_KEY: source.GEMINI_SEARCH_API_KEY || undefined,
     FRED_API_KEY: source.FRED_API_KEY || undefined,
     EIA_API_KEY: source.EIA_API_KEY || undefined,
   });

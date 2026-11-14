@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { type SearchBudget, type SearchSpend, type SearchUsage, searchBudgetSchema } from './search/budget.ts';
 import type {
   JobPatch, JobRunStats, JobScore, JobSource, JobStore, JobTier, JobTrigger, KnownJob, NewJob,
   PendingJob, ReportedJob, UnscoredJob, VerificationResult,
@@ -44,6 +45,38 @@ class SupabaseJobStore implements JobStore {
     if (error) throw new Error(`load job profile: ${error.message}`);
     const text = (data?.value as { text?: unknown } | undefined)?.text;
     return typeof text === 'string' && text.trim() ? text.trim() : null;
+  }
+
+  async loadSearchBudget(): Promise<SearchBudget | null> {
+    const { data, error } = await this.db.from('app_settings').select('value').eq('key', 'job_search_budget').maybeSingle();
+    if (error) throw new Error(`load search budget: ${error.message}`);
+    // A broken setting must switch paid search off, never let it run without limits.
+    const parsed = searchBudgetSchema.safeParse(data?.value);
+    return parsed.success ? parsed.data : null;
+  }
+
+  async loadSearchSpend(engineId: string, today: string): Promise<SearchSpend> {
+    const { data, error } = await this.db.from('search_spend').select('usage_date, searches, cost_usd')
+      .eq('engine_id', engineId).gte('usage_date', `${today.slice(0, 7)}-01`).lte('usage_date', today);
+    if (error) throw new Error(`load search spend: ${error.message}`);
+    const rows = data as Array<{ usage_date: string; searches: number; cost_usd: number | string }>;
+    return {
+      monthCostUsd: rows.reduce((sum, row) => sum + Number(row.cost_usd), 0),
+      monthSearches: rows.reduce((sum, row) => sum + row.searches, 0),
+      todayCostUsd: rows.filter((row) => row.usage_date === today).reduce((sum, row) => sum + Number(row.cost_usd), 0),
+    };
+  }
+
+  async recordSearchSpend(engineId: string, today: string, usage: SearchUsage, costUsd: number): Promise<void> {
+    const { error } = await this.db.rpc('record_search_spend', {
+      p_engine_id: engineId,
+      p_usage_date: today,
+      p_searches: usage.searches,
+      p_tokens_in: usage.tokensIn,
+      p_tokens_out: usage.tokensOut,
+      p_cost_usd: costUsd,
+    });
+    if (error) throw new Error(`record search spend: ${error.message}`);
   }
 
   async startRun(trigger: JobTrigger): Promise<string> {

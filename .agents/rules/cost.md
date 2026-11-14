@@ -20,9 +20,20 @@ This project must run at **zero cost**. These rules are non-negotiable and overr
 | Groq, Gemini, Cerebras, Cloudflare Workers AI (free tiers) | AI scoring / summary / translation | Gemini free tier only applies to keys from a project **without billing**; respect daily/RPM limits |
 | Resend Free | OTP email | 100 emails/day, 3,000/month. Uses the default sender `onboarding@resend.dev` (no domain): it can only send to the Resend account's own email, so `ADMIN_EMAIL` must be that address |
 | Jina Reader (`r.jina.ai`, no key) | fallback reader when a page cannot be fetched directly | ~20 requests/minute; the worker spaces calls ≥ 3.1 s apart; may block a domain for anonymous users for hours. Approved by the user on 2026-10-15. Do **not** use a Jina API key: its free tokens are one-time |
+| DuckDuckGo HTML results (`html.duckduckgo.com`, no key) | free fallback web search of the job board | Unofficial page; blocks after ~3 queries in a row, so the worker sends at most 3 per run, 8 s apart. Approved by the user on 2026-11-15 |
+| Job sites: ITviec (via Jina), VietnamWorks, LinkedIn guest search, CareerViet | job board listings | Public pages only; a blocked site is skipped, never worked around. Approved by the user on 2026-11-14 |
 | FRED, EIA, SEC EDGAR, Treasury FiscalData, Google News RSS, GDELT, public RSS | data sources | Respect rate limits and required headers (SEC `User-Agent`) |
 
 Anything not in this table needs user approval before use (rule 1).
+
+## 2a. The one approved paid service
+
+The user approved **one** exception on 2026-11-14: Gemini API "Grounding with Google Search" for the job board, on a separate prepaid Google project (`GEMINI_SEARCH_API_KEY`), capped at **1 USD per month**.
+
+- Prepaid credit only, auto-reload **off**: an empty balance stops the service, it never bills the card.
+- The worker enforces the cap itself (`apps/worker/src/jobs/search/budget.ts`, settings in `app_settings.job_search_budget`): it stops at 0.80 USD or 4,000 searches a month and spreads what is left over the remaining days. Never raise these limits, add another paid model, or use this key for anything else without asking.
+- The digest's `GEMINI_API_KEY` stays on a project **without** billing.
+- Details: `docs/JOBS_PLAN.md` §4.
 
 ## 3. Required when adding or changing anything that consumes quota
 
