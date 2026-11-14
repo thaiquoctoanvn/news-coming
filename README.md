@@ -106,7 +106,9 @@ Chỉ quản trị viên xem được. Sau khi đăng nhập, cạnh tên trang 
 - Tin được chia nhóm: Nổi bật, Phù hợp, Cân nhắc, Chưa xác minh, Điểm thấp. Tin **Chưa xác minh** là tin hệ thống không mở được trang gốc: bấm **Xem tin** để tự kiểm tra còn hạn hay không.
 - Điểm 1–10 do AI chấm theo **Hồ sơ để chấm điểm** (trang Vận hành → Việc làm → Sửa hồ sơ). Hồ sơ chỉ dùng để chấm điểm, không dùng để loại tin; chỉ ghi kỹ năng và kinh nghiệm, không ghi thông tin cá nhân.
 - Trang Vận hành → Việc làm còn cho bật/tắt từng nguồn, xem chi tiêu tìm kiếm trong tháng và số dư credit ước tính. Sau mỗi lần nạp credit ở Google AI Studio, bấm **Nhập lần nạp credit** để cảnh báo sắp hết tính đúng.
-- Chạy quét ngay: GitHub → Actions → **Scan jobs** → Run workflow.
+- Tin đã báo mà công ty vẫn còn tuyển sau 14 ngày sẽ hiện lại ở báo cáo mới với nhãn **Cập nhật**.
+- Nút **Quét ngay** (trên trang Việc làm và trang Vận hành) chạy một lần quét ngoài lịch. Hộp thoại hiện thời gian chờ, chi phí và số lượt còn lại; chỉ chạy khi bấm OK. Tối đa 3 lượt mỗi ngày.
+- Tin không còn thấy trên nguồn quá 30 ngày tự bị xóa (đổi ở Vận hành → Việc làm → **Đổi số ngày giữ tin**, tối thiểu 21 ngày). Nút **Dọn ngay** dọn luôn tin việc làm cũ.
 
 ## 3. Lịch chạy và hạn mức
 

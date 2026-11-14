@@ -561,7 +561,7 @@ Secret runtime của Edge Functions (`ADMIN_EMAIL`, API key AI…) đặt một 
 | `FRED_API_KEY`, `EIA_API_KEY`, `SEC_USER_AGENT` | GitHub Secrets |
 | `GEMINI_SEARCH_API_KEY` (key trả trước của project Google riêng, chỉ cho tìm kiếm việc làm — §17) | GitHub Secrets |
 | `ADMIN_USERNAME`, `ADMIN_EMAIL` | Supabase Secrets |
-| `GITHUB_DISPATCH_TOKEN` (fine-grained, chỉ quyền Actions của repo này) | Supabase Vault (pg_net) + Supabase Secrets (`trigger-refresh`) |
+| `GITHUB_DISPATCH_TOKEN` (fine-grained, chỉ quyền Actions của repo này) | Supabase Vault (pg_net) + Supabase Secrets (`trigger-refresh`, `trigger-jobs`) |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | Netlify env (public, an toàn nhờ RLS) |
 
 ---
@@ -610,7 +610,10 @@ kết quả thử nguồn và việc còn mở: `docs/JOBS_PLAN.md`.
 | Trang `/viec-lam`, nút chuyển khu vực ở header, khối "Việc làm" ở trang Vận hành | `apps/web/src/features/jobs/`, `components/AreaSwitch.tsx`, `features/admin/JobsOperations.tsx` |
 
 - **Quyền:** `anon` không có grant nào trên 4 bảng; admin chỉ đọc (và bật/tắt `job_sources.enabled`); worker ghi bằng service_role. Test: `supabase/tests/database/jobs.test.sql`.
-- **Pipeline:** đọc nguồn trực tiếp (ITviec qua Jina, VietnamWorks API, LinkedIn, CareerViet) → tìm kiếm cho trang bị chặn (TopCV, JobsGo, TopDev) → lọc bằng code (tiêu đề có `android`/`mobile`, Hồ Chí Minh hoặc remote, làm mới trong 14 ngày) → chống trùng (link, công ty + vị trí) → xác minh trên trang chi tiết (hết hạn thì ẩn, không đọc được thì giữ ở nhóm "Chưa xác minh") → chấm điểm 1–10 bằng router AI free (4 tin/request, ghi `ai_usage` dưới topic đang bật đầu tiên) → xếp nhóm. Mỗi bước lưu trạng thái nên lần chạy sau làm nốt phần dở.
+- **Pipeline:** đọc nguồn trực tiếp (ITviec qua Jina, VietnamWorks API, LinkedIn, CareerViet, trang tuyển dụng VNG / Grab / Cake) → tìm kiếm cho trang bị chặn (TopCV, JobsGo, TopDev) → lọc bằng code (tiêu đề có `android`/`mobile`, Hồ Chí Minh hoặc remote, làm mới trong 14 ngày) → chống trùng (link, công ty + vị trí) → xác minh trên trang chi tiết (hết hạn thì ẩn, không đọc được thì giữ ở nhóm "Chưa xác minh") → chấm điểm 1–10 bằng router AI free (4 tin/request, ghi `ai_usage` dưới topic đang bật đầu tiên) → xếp nhóm. Mỗi bước lưu trạng thái nên lần chạy sau làm nốt phần dở.
+- **Nhắc lại:** tin đã báo mà vẫn còn trên nguồn sau 14 ngày thì chuyển sang báo cáo hôm nay với tag "Cập nhật", giữ điểm cũ. Lương hoặc hạn nộp đổi cũng báo lại như vậy.
+- **Quét ngay:** nút trên `/viec-lam` và trang Vận hành → hộp cảnh báo → Edge Function `trigger-jobs` (admin, `app_settings.job_scan.daily_cap` = 3 lượt/ngày qua `use_action_quota(…, 'jobs', …)`) → `workflow_dispatch` của `jobs.yml`.
+- **Dọn dữ liệu** (`20261115000300_job_extras.sql`): tin không còn thấy trên nguồn quá `app_settings.job_retention.days` (mặc định 30, tối thiểu 21); tin đã đóng 30 ngày; chữ của trang tin 7 ngày sau khi báo; lịch sử quét 90 ngày; sổ chi tiêu 400 ngày. Nút "Dọn ngay" dọn luôn phần này.
 - **Hồ sơ chấm điểm** (`app_settings.job_profile`) chỉ dùng để chấm điểm, không bao giờ loại tin. Không nằm trong repo.
 - **Tìm kiếm trả phí:** ngoại lệ duy nhất của quy tắc zero cost (`.agents/rules/cost.md` §2a). Gemini + Google Search trên key trả trước; worker tự chặn ở 0,80 USD hoặc 4.000 lượt tìm mỗi tháng (`app_settings.job_search_budget`, `jobs/search/budget.ts`), hết ngân sách hoặc lỗi thì dùng DuckDuckGo (≤ 3 truy vấn/lần chạy). Chỉ dùng link trong kết quả tìm kiếm, không dùng chữ model viết.
 - **Hạn mức thêm vào dịch vụ free:** Jina ~10–40 request/ngày (giãn ≥ 3,1 giây, chạy lúc 07:45 sau bản tin sáng); Groq ~2–15 request chấm điểm/ngày (trần 20 request mỗi lần chạy).

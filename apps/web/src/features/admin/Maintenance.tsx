@@ -19,6 +19,10 @@ const COUNT_LABELS: Readonly<Record<string, string>> = {
   schedule_dispatches: 'lần gọi lịch',
   login_attempts: 'lần đăng nhập',
   events: 'sự kiện',
+  jobs: 'tin việc làm',
+  job_texts: 'nội dung tin việc làm',
+  job_runs: 'lần quét việc làm',
+  search_spend: 'dòng chi tiêu tìm kiếm',
 };
 
 /** "12 bản tin · 340 tin" — tables with nothing removed are left out. */

@@ -5,11 +5,12 @@ import { FIELD_INPUT, Field, FormDialog } from '../../components/FormDialog.tsx'
 import { Toggle } from '../../components/Toggle.tsx';
 import { formatShortDate, formatTime, vietnamDay } from '../../lib/format.ts';
 import {
-  type JobSource, fetchJobProfile, fetchJobRuns, fetchJobSources, fetchSearchStatus, saveJobProfile,
-  saveSearchCredit, setJobSourceEnabled,
+  type JobSource, MIN_RETENTION_DAYS, fetchJobProfile, fetchJobRetentionDays, fetchJobRuns, fetchJobSources,
+  fetchSearchStatus, saveJobProfile, saveJobRetentionDays, saveSearchCredit, setJobSourceEnabled,
 } from '../../lib/jobs-api.ts';
 import { useSupabase } from '../../lib/supabase.ts';
 import { creditStatus } from '../jobs/job-view.ts';
+import { ScanJobsButton } from '../jobs/ScanJobsButton.tsx';
 
 const STATUS_COLOR: Readonly<Record<string, 'success' | 'warning' | 'danger' | 'default'>> = {
   success: 'success', partial: 'warning', failed: 'danger', running: 'default',
@@ -22,7 +23,11 @@ const KIND_LABEL: Readonly<Record<JobSource['kind'], string>> = {
 };
 const MAX_PROFILE_CHARS = 3_000;
 
-type Dialog = 'profile' | 'credit' | null;
+type Dialog = 'profile' | 'credit' | 'retention' | null;
+
+const DIALOG_QUERY: Readonly<Record<Exclude<Dialog, null>, string>> = {
+  profile: 'job-profile', credit: 'job-search-status', retention: 'job-retention',
+};
 
 /** Job board block of the operations page: last runs, sources, search spend, scoring profile. */
 export function JobsOperations() {
@@ -33,11 +38,13 @@ export function JobsOperations() {
   const [profileText, setProfileText] = useState('');
   const [creditUsd, setCreditUsd] = useState('5');
   const [creditDate, setCreditDate] = useState(vietnamDay(new Date()));
+  const [retentionDays, setRetentionDays] = useState('30');
 
   const runs = useQuery({ queryKey: ['job-runs', 5], queryFn: () => fetchJobRuns(db, 5), refetchInterval: 60_000 });
   const sources = useQuery({ queryKey: ['job-sources'], queryFn: () => fetchJobSources(db) });
   const search = useQuery({ queryKey: ['job-search-status'], queryFn: () => fetchSearchStatus(db) });
   const profile = useQuery({ queryKey: ['job-profile'], queryFn: () => fetchJobProfile(db) });
+  const retention = useQuery({ queryKey: ['job-retention'], queryFn: () => fetchJobRetentionDays(db) });
 
   const toggle = useMutation({
     mutationFn: (source: JobSource) => setJobSourceEnabled(db, source.id, !source.enabled),
@@ -46,14 +53,19 @@ export function JobsOperations() {
   const save = useMutation({
     mutationFn: async () => {
       if (dialog === 'profile') return saveJobProfile(db, profileText);
+      if (dialog === 'retention') {
+        const days = Number(retentionDays);
+        if (!Number.isInteger(days) || days < MIN_RETENTION_DAYS || days > 365) throw new Error(`Số ngày phải từ ${MIN_RETENTION_DAYS} đến 365`);
+        return saveJobRetentionDays(db, days);
+      }
       const amount = Number(creditUsd);
       if (!Number.isFinite(amount) || amount <= 0) throw new Error('Số tiền phải lớn hơn 0');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(creditDate)) throw new Error('Ngày nạp không hợp lệ');
       return saveSearchCredit(db, amount, creditDate);
     },
     onSuccess: () => {
+      if (dialog) void queryClient.invalidateQueries({ queryKey: [DIALOG_QUERY[dialog]] });
       setDialog(null);
-      void queryClient.invalidateQueries({ queryKey: [dialog === 'profile' ? 'job-profile' : 'job-search-status'] });
     },
     onError: (e: Error) => setError(e.message),
   });
@@ -65,6 +77,7 @@ export function JobsOperations() {
       setCreditUsd(String(search.data.creditUsd));
       setCreditDate(search.data.creditDate ?? vietnamDay(new Date()));
     }
+    if (next === 'retention') setRetentionDays(String(retention.data ?? 30));
     setDialog(next);
   };
 
@@ -75,7 +88,14 @@ export function JobsOperations() {
   return (
     <section aria-labelledby="jobs-ops-heading" className="flex flex-col gap-4">
       <h2 id="jobs-ops-heading" className="font-serif text-lg font-semibold">Việc làm</h2>
-      <p className="text-sm text-muted">Quét lúc 07:45 mỗi sáng. Chạy tay: GitHub → Actions → Scan jobs → Run workflow.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="min-w-0 flex-1 text-sm text-muted">
+          Quét lúc 07:45 mỗi sáng. Tin không còn thấy trên nguồn quá <strong className="text-foreground">{retention.data ?? 30} ngày</strong> tự bị xóa lúc 03:10;
+          nội dung trang tin xóa sau 7 ngày, tin đã đóng sau 30 ngày.{' '}
+          <button type="button" className="underline focus-visible:outline-2 focus-visible:outline-focus" onClick={() => open('retention')}>Đổi số ngày giữ tin</button>
+        </p>
+        <ScanJobsButton />
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="gap-3 p-5">
@@ -157,6 +177,13 @@ export function JobsOperations() {
               onChange={(event) => setProfileText(event.target.value)}
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-focus"
             />
+          </Field>
+        </FormDialog>
+      )}
+      {dialog === 'retention' && (
+        <FormDialog title="Số ngày giữ tin việc làm" onSubmit={() => save.mutate()} onClose={() => setDialog(null)} error={error}>
+          <Field label="Số ngày" hint={`Tính từ lần cuối tin còn thấy trên nguồn. Tối thiểu ${MIN_RETENTION_DAYS} ngày. Tin còn được làm mới thì không bị xóa.`}>
+            <input type="number" min={MIN_RETENTION_DAYS} max={365} step="1" inputMode="numeric" value={retentionDays} onChange={(event) => setRetentionDays(event.target.value)} className={FIELD_INPUT} />
           </Field>
         </FormDialog>
       )}

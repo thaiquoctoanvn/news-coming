@@ -428,3 +428,6 @@ verify_jwt = false
 
 [functions.category-assist]
 verify_jwt = false
+
+[functions.trigger-jobs]
+verify_jwt = false

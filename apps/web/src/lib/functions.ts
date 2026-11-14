@@ -45,6 +45,12 @@ export async function requestRefresh(db: SupabaseClient, topicId: string, editio
   return result.message;
 }
 
+/** "Quét ngay": asks GitHub Actions to run the job scan; limited per day on the server. */
+export async function requestJobScan(db: SupabaseClient): Promise<string> {
+  const result = await invoke<{ message: string }>(db, 'trigger-jobs', {});
+  return result.message;
+}
+
 export interface CategorySuggestion {
   readonly keywords: string[];
   readonly excludeKeywords: string[];

@@ -153,3 +153,35 @@ export async function fetchJobProfile(db: SupabaseClient): Promise<string> {
 export async function saveJobProfile(db: SupabaseClient, text: string): Promise<void> {
   check(await db.from('app_settings').upsert({ key: 'job_profile', value: { text: text.trim() } }).select('key'), 'app_settings');
 }
+
+export interface ScanQuota {
+  readonly dailyCap: number;
+  readonly usedToday: number;
+}
+
+const DEFAULT_SCAN_CAP = 3;
+
+/** Presses of "Quét ngay" today (UTC day, like the other buttons) against the daily cap. */
+export async function fetchScanQuota(db: SupabaseClient, now = new Date()): Promise<ScanQuota> {
+  const cap = (await fetchSetting<{ daily_cap?: number }>(db, 'job_scan'))?.daily_cap;
+  const rows = check(
+    await db.from('action_quota').select('count').eq('action', 'jobs').eq('usage_date', now.toISOString().slice(0, 10)),
+    'action_quota',
+  ) as Array<{ count: number }>;
+  return {
+    dailyCap: typeof cap === 'number' && cap > 0 ? cap : DEFAULT_SCAN_CAP,
+    usedToday: rows.reduce((total, row) => total + row.count, 0),
+  };
+}
+
+export const MIN_RETENTION_DAYS = 21;
+const DEFAULT_RETENTION_DAYS = 30;
+
+export async function fetchJobRetentionDays(db: SupabaseClient): Promise<number> {
+  const days = (await fetchSetting<{ days?: number }>(db, 'job_retention'))?.days;
+  return typeof days === 'number' ? Math.max(days, MIN_RETENTION_DAYS) : DEFAULT_RETENTION_DAYS;
+}
+
+export async function saveJobRetentionDays(db: SupabaseClient, days: number): Promise<void> {
+  check(await db.from('app_settings').upsert({ key: 'job_retention', value: { days } }).select('key'), 'app_settings');
+}
