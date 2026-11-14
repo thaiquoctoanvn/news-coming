@@ -26,6 +26,7 @@
 - Minimize AI token use: deterministic code for fetching, dedup and filtering; AI only for scoring, summarizing and translating the few items that are actually shown.
 - Never stop on quota: every pipeline step is idempotent and resumable; running out of quota delays work, it does not break the system.
 - Deliver a short, prioritized Vietnamese digest (10–12 items) on **one product topic: finance & geopolitics** (`macro_finance`), with configuration fully driven from the database and toggleable at every level. The schema stays topic-scoped, but the UI no longer manages topics or entities.
+- A second, **admin-only** area: a daily Android / mobile job board (`/viec-lam`). It is not a topic, has its own tables, and is never public (`@docs/DESIGN.md` §17, `@docs/JOBS_PLAN.md`).
 - Keep the public site safe: public read only for enabled topics; all writes and quota-consuming actions are admin-only and enforced in Postgres (RLS).
 
 ---
@@ -44,7 +45,7 @@
 
 - When replying to the user in Vietnamese, refer to yourself as **"em"** and address the user as **"đại ca"**. (`@.agents/rules/PRONOUNS.md`)
 - **Faithful content:** summaries use only facts from the article's own text (no outside knowledge, speculation or invented numbers); a title is never paired with another article's text; translations add nothing. Items failing the automatic checks are never published. (`@.agents/rules/content-integrity.md`)
-- **Zero cost:** never use, enable, or upgrade to any paid service, plan, model, or add-on, and never add billing or a payment method. Adding any new external service — even a free one — requires asking the user first. When unsure whether something costs money, stop and ask. (`@.agents/rules/cost.md`)
+- **Zero cost:** never use, enable, or upgrade to any paid service, plan, model, or add-on, and never add billing or a payment method. The single approved exception is the job board's prepaid web search, capped in code at 1 USD per month — never widen it. Adding any new external service — even a free one — requires asking the user first. When unsure whether something costs money, stop and ask. (`@.agents/rules/cost.md`)
 - Never commit secrets; the repo is public. Secrets live only in GitHub Secrets/Environments and Supabase Secrets/Vault.
 - All changes go through a PR into `main`; never push directly to `main`.
 - Commit messages: at most 2 lines (`<type>: <description>` + one optional body line), and never any AI name or attribution (no `Co-Authored-By` AI trailer). (`@.agents/rules/common/git-workflow.md`)
@@ -78,4 +79,5 @@
 | `@.agents/rules/web/patterns.md` | Choosing state tooling (server/client/URL/form state), URL-as-state for filters (topic, date, edition), optimistic updates, parallel loading |
 | `@.agents/rules/web/security.md` | Configuring Netlify `_headers` (CSP, HSTS, etc.), XSS prevention, third-party scripts, form abuse protection |
 | `@.agents/rules/web/performance.md` | Bundle size budgets, lazy-loading heavy libraries (charts), images, fonts, Core Web Vitals |
+| `@docs/JOBS_PLAN.md` | Any work on the job board: job sources, verification, scoring, web search and its spending cap, the `/viec-lam` page |
 | `@docs/DESIGN.md` | Any work on schema/RLS/migrations, worker pipeline, AI providers and quotas, scoring/slot selection, scheduling, Edge Functions, CI/CD |
