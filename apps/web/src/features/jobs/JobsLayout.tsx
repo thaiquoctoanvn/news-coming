@@ -22,7 +22,7 @@ export function JobsLayout() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
           <div className="min-w-0 flex-1 md:flex-none">
             <span className="block font-serif text-2xl font-bold leading-tight tracking-tight">News Coming</span>
-            <span className="block truncate text-xs uppercase tracking-[0.2em] text-muted">Việc làm theo hồ sơ</span>
+            <span className="block truncate text-xs uppercase tracking-[0.2em] text-muted">Việc làm</span>
           </div>
           <AreaSwitch current="jobs" className="order-last w-full md:order-none md:w-auto" />
           <nav aria-label="Mục chính" className="order-last flex w-full min-w-0 items-center gap-1 md:order-none md:w-auto md:flex-1 md:justify-center">

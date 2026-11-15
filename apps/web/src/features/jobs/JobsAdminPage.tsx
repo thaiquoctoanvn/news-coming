@@ -120,10 +120,13 @@ export function JobsAdminPage() {
       <Card className="gap-3 p-5">
         <Card.Title className="text-base font-semibold">Nguồn</Card.Title>
         {sources.isError && <p className="text-sm text-danger">Không tải được: {sources.error.message}</p>}
-        <ul className="grid gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {(sources.data ?? []).map((source) => (
-            <li key={source.id} className="flex items-center justify-between gap-3 text-sm">
-              <span className="min-w-0 truncate">{source.name} <span className="text-xs text-muted">· {KIND_LABEL[source.kind]}</span></span>
+            <li key={source.id} className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2 text-sm">
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate font-medium">{source.name}</span>
+                <span className="truncate text-xs text-muted">{KIND_LABEL[source.kind]}</span>
+              </span>
               <Toggle label={`Bật nguồn ${source.name}`} isSelected={source.enabled} isDisabled={toggle.isPending} onChange={() => toggle.mutate(source)} />
             </li>
           ))}

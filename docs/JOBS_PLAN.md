@@ -31,7 +31,7 @@ Routine cũ **không** gửi email; pipeline mới cũng không gửi email hay 
 | Hồ sơ chấm điểm | Nhiều hồ sơ, mỗi hồ sơ bắt buộc có tiêu đề; quét, chấm và lưu theo từng hồ sơ; trang bản tin xem theo từng hồ sơ (chốt 2026-11-16) |
 | Từ khoá tìm kiếm | Mỗi hồ sơ có 1–5 từ khoá riêng (bắt buộc). Một lần quét tìm tất cả từ khoá của các hồ sơ đang bật trên mọi nguồn, tối đa 6 từ khoá (lấy theo thứ tự hồ sơ cũ trước); mỗi hồ sơ chỉ chấm tin có tiêu đề chứa từ khoá của nó. Không có hồ sơ nào bật thì không quét nguồn nào. Trần 1 USD/tháng của tìm kiếm trả phí không đổi (chốt 2026-11-16) |
 | Quản trị | Mỗi khu vực tin có trang quản trị riêng (`/quan-tri` cho tài chính, `/viec-lam/quan-tri` cho việc làm), chấp nhận lặp giao diện |
-| Trang bản tin việc làm | Mở cùng tab (không mở tab mới); lưới 3 cột; bấm thẻ mở popup chi tiết |
+| Trang bản tin việc làm | Mở cùng tab (không mở tab mới); lưới 3 cột; bấm thẻ mở popup chi tiết; mỗi thẻ có sẵn nút "Xem tin" mở tin gốc (chốt 2026-11-15) |
 | Trang tuyển dụng công ty | Thử Gemini trước; không ra thì viết code đọc riêng (kết quả: phải viết riêng, xem §9) |
 
 ## 3. Kết quả thử nghiệm (nhánh `spike/job-sources`, chạy trên GitHub Actions 2026-11-14)

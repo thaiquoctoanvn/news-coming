@@ -26,7 +26,8 @@ function Labels({ job, sourceName }: Props) {
 }
 
 /**
- * One posting: a compact card; pressing it opens the full details in a popup.
+ * One posting: a compact card; pressing it opens the full details in a popup, and "Xem tin" at the
+ * bottom opens the posting itself.
  * Everything is rendered as text; the link only opens http(s) addresses.
  */
 export function JobCard({ job, sourceName }: Props) {
@@ -40,14 +41,14 @@ export function JobCard({ job, sourceName }: Props) {
     <>
       <Card
         render={(props) => <article {...props} />}
-        className={`h-full p-0 transition-colors hover:bg-surface ${job.tier === 'top' ? 'border-l-4 border-l-success' : ''}`}
+        className={`flex h-full flex-col gap-0 p-0 transition-colors hover:bg-surface ${job.tier === 'top' ? 'border-l-4 border-l-success' : ''}`}
       >
         <button
           type="button"
           aria-haspopup="dialog"
           aria-label={`Xem chi tiết: ${job.title}`}
           onClick={() => setIsOpen(true)}
-          className="flex h-full w-full flex-col gap-2 rounded-[inherit] p-5 text-left focus-visible:outline-2 focus-visible:outline-focus"
+          className="flex w-full flex-1 flex-col gap-2 rounded-[inherit] p-5 text-left focus-visible:outline-2 focus-visible:outline-focus"
         >
           <Labels job={job} sourceName={sourceName} />
           <h3 className="line-clamp-3 font-serif text-lg font-semibold leading-snug">{job.title}</h3>
@@ -55,6 +56,15 @@ export function JobCard({ job, sourceName }: Props) {
           {facts && <p className="text-sm">{facts}</p>}
           {job.reason && <p className="line-clamp-3 text-sm leading-relaxed">{job.reason}</p>}
         </button>
+        {/* Outside the button: a link cannot sit inside one. */}
+        {href && (
+          <div className="border-t border-border px-5 py-3">
+            <Link href={href} target="_blank" rel="noopener noreferrer" className="text-sm">
+              Xem tin
+              <Link.Icon />
+            </Link>
+          </div>
+        )}
       </Card>
 
       <Modal.Backdrop isOpen={isOpen} onOpenChange={setIsOpen}>

@@ -18,7 +18,7 @@ const job: Job = {
 };
 
 describe('JobCard', () => {
-  test('the compact card shows the essentials as text and has no link of its own', () => {
+  test('the compact card shows the essentials as text and one safe link to the posting', () => {
     render(<JobCard job={job} sourceName="ITviec" />);
 
     expect(screen.getByRole('heading', { name: 'Senior Android Engineer <b>Kotlin</b>' })).toBeInTheDocument();
@@ -27,7 +27,9 @@ describe('JobCard', () => {
     expect(screen.getByText('Acme · Ho Chi Minh')).toBeInTheDocument();
     expect(screen.getByText('20–45 triệu · Hạn 29/11 · Làm mới 07/11')).toBeInTheDocument();
     expect(screen.getByText('Hợp Kotlin và Compose.')).toBeInTheDocument();
-    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    const link = screen.getByRole('link', { name: /Xem tin/ });
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
@@ -35,6 +37,7 @@ describe('JobCard', () => {
     const user = userEvent.setup();
     render(<JobCard job={job} sourceName="ITviec" />);
 
+    expect(screen.getByRole('link', { name: /Xem tin/ })).toHaveAttribute('href', 'https://itviec.com/it-jobs/android-1');
     await user.click(screen.getByRole('button', { name: /Xem chi tiết: Senior Android Engineer/ }));
 
     const dialog = await screen.findByRole('dialog');
