@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, test, vi } from 'vitest';
-import type { Job, SearchStatus } from '../../lib/jobs-api.ts';
+import { type Job, type SearchStatus, parseKeywords, scanKeywords } from '../../lib/jobs-api.ts';
 import { afterLoginPath } from '../auth/LoginPage.tsx';
 import { SupabaseContext } from '../../lib/supabase.ts';
 import { JobCard } from './JobCard.tsx';
@@ -165,6 +165,19 @@ describe('ProfilesSection', () => {
 
     await user.type(within(dialog).getByLabelText(/Tiêu đề/), 'Android Senior');
     await user.click(within(dialog).getByRole('button', { name: 'OK' }));
-    expect(insert).toHaveBeenCalledWith({ title: 'Android Senior', profile_text: 'Kotlin, 5 năm' });
+    expect(await within(dialog).findByText('Cần nhập ít nhất một từ khoá tìm kiếm')).toBeInTheDocument();
+    expect(insert).not.toHaveBeenCalled();
+
+    await user.type(within(dialog).getByLabelText(/Từ khoá/), 'Android, React Native , android');
+    await user.click(within(dialog).getByRole('button', { name: 'OK' }));
+    expect(insert).toHaveBeenCalledWith({ title: 'Android Senior', profile_text: 'Kotlin, 5 năm', keywords: ['android', 'react native'] });
+  });
+
+  test('keywords are limited per profile, and a scan uses the first ones of the enabled profiles', () => {
+    expect(() => parseKeywords('a1, a2, a3, a4, a5, a6')).toThrow('tối đa 5');
+    expect(() => parseKeywords('android, x')).toThrow('“x”');
+    const profile = (id: string, keywords: string[], enabled = true) => ({ id, title: id, text: 't', keywords, enabled });
+    expect(scanKeywords([profile('a', ['k1', 'k2', 'k3', 'k4']), profile('off', ['zz'], false), profile('b', ['k1', 'k5', 'k6', 'k7'])]))
+      .toEqual({ used: ['k1', 'k2', 'k3', 'k4', 'k5', 'k6'], skipped: ['k7'] });
   });
 });

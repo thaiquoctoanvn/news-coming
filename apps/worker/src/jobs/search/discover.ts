@@ -24,7 +24,7 @@ const SITES: readonly SearchSite[] = [
   { sourceId: 'jobsgo', site: 'jobsgo.vn/viec-lam', posting: /^https:\/\/jobsgo\.vn\/viec-lam\/(.+)-\d+\.html/ },
   { sourceId: 'topdev', site: 'topdev.vn/viec-lam', posting: /^https:\/\/topdev\.vn\/viec-lam\/(.+)-\d+(?:$|[/?#])/ },
 ];
-const TERMS = ['android developer Hồ Chí Minh', 'mobile developer Hồ Chí Minh'] as const;
+const PLACE = 'Hồ Chí Minh';
 
 export interface SearchEngines {
   /** Undefined when no paid search key is configured. */
@@ -37,6 +37,8 @@ export interface DiscoverOptions {
   readonly store: JobStore;
   readonly engines: SearchEngines;
   readonly enabledSourceIds: ReadonlySet<string>;
+  /** The scan's keywords; each one is searched on every site. */
+  readonly keywords: readonly string[];
   readonly now: Date;
 }
 
@@ -65,9 +67,9 @@ export function toFoundJob(url: string, engineId: string): FoundJob | null {
 }
 
 export async function discover(options: DiscoverOptions): Promise<Discovery> {
-  const { store, engines, enabledSourceIds, now } = options;
+  const { store, engines, enabledSourceIds, keywords, now } = options;
   const queries = SITES.filter((site) => enabledSourceIds.has(site.sourceId))
-    .flatMap((site) => TERMS.map((term) => `site:${site.site} ${term}`));
+    .flatMap((site) => keywords.map((keyword) => `site:${site.site} ${keyword} ${PLACE}`));
   const today = now.toISOString().slice(0, 10);
   const budget = engines.gemini && enabledSourceIds.has(GEMINI_ENGINE) ? await store.loadSearchBudget() : null;
   let spend: SearchSpend | null = budget ? await store.loadSearchSpend(GEMINI_ENGINE, today) : null;

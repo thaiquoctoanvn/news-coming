@@ -1,3 +1,4 @@
+import { slug } from '../filter.ts';
 import type { FoundJob } from '../types.ts';
 import { decodeEntities, textOrNull } from './html.ts';
 
@@ -5,10 +6,10 @@ import { decodeEntities, textOrNull } from './html.ts';
 // (it also returns unrelated IT jobs); the title filter removes those.
 
 const ORIGIN = 'https://careerviet.vn';
-export const CAREERVIET_LISTINGS = [
-  `${ORIGIN}/viec-lam/android-tai-ho-chi-minh-kl8-vi.html`,
-  `${ORIGIN}/viec-lam/mobile-tai-ho-chi-minh-kl8-vi.html`,
-] as const;
+
+export function careerVietListing(keyword: string): string {
+  return `${ORIGIN}/viec-lam/${slug(keyword)}-tai-ho-chi-minh-kl8-vi.html`;
+}
 
 const DAY_MS = 86_400_000;
 

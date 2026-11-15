@@ -104,7 +104,7 @@ Chỉ quản trị viên xem được. Sau khi đăng nhập, cạnh tên trang 
 
 **Bản tin**
 
-- Mỗi sáng 07:45 hệ thống quét tin tuyển dụng có chữ "android" hoặc "mobile" ở Hồ Chí Minh hoặc làm từ xa, làm mới trong 14 ngày.
+- Mỗi sáng 07:45 hệ thống quét tin tuyển dụng có tiêu đề chứa từ khoá của các hồ sơ đang bật (mặc định "android", "mobile") ở Hồ Chí Minh hoặc làm từ xa, làm mới trong 14 ngày.
 - Chọn **hồ sơ** ở thanh trên cùng (hiện khi có từ hai hồ sơ) để xem báo cáo chấm theo hồ sơ đó, rồi chọn ngày.
 - Tin hiện dạng lưới, chia nhóm: Nổi bật, Phù hợp, Cân nhắc, Chưa xác minh, Điểm thấp. Bấm vào một thẻ để mở chi tiết: lương, hạn nộp, nhận xét, gợi ý CV và nút **Xem tin**.
 - Tin **Chưa xác minh** là tin hệ thống không mở được trang gốc: mở chi tiết và bấm **Xem tin** để tự kiểm tra còn hạn hay không.
@@ -112,7 +112,7 @@ Chỉ quản trị viên xem được. Sau khi đăng nhập, cạnh tên trang 
 
 **Quản trị** (`/viec-lam/quan-tri`, tách riêng với quản trị của bảng tin tài chính)
 
-- **Hồ sơ để chấm điểm:** thêm, sửa, bật/tắt, xóa hồ sơ. Mỗi hồ sơ bắt buộc có tiêu đề (dùng để chọn trên trang Bản tin). Mỗi hồ sơ đang bật được chấm điểm riêng ở mỗi lần quét; hồ sơ chỉ dùng để chấm điểm, không dùng để loại tin. Chỉ ghi kỹ năng và kinh nghiệm, không ghi thông tin cá nhân. Xóa hồ sơ sẽ xóa điểm và báo cáo của hồ sơ đó.
+- **Hồ sơ tìm việc:** thêm, sửa, bật/tắt, xóa hồ sơ. Mỗi hồ sơ bắt buộc có tiêu đề (dùng để chọn trên trang Bản tin) và từ khoá tìm kiếm (1–5 từ khoá, cách nhau bằng dấu phẩy): hồ sơ chỉ nhận tin có tiêu đề chứa một từ khoá của nó. Mỗi lần quét tìm tối đa 6 từ khoá tính trên tất cả hồ sơ đang bật; trang quản trị báo từ khoá nào chưa được tìm. Mỗi hồ sơ đang bật được chấm điểm riêng ở mỗi lần quét; hồ sơ chỉ dùng để chấm điểm, không dùng để loại tin. Chỉ ghi kỹ năng và kinh nghiệm, không ghi thông tin cá nhân. Xóa hồ sơ sẽ xóa điểm và báo cáo của hồ sơ đó.
 - **Quét ngay:** chạy một lần quét ngoài lịch. Hộp thoại hiện thời gian chờ, chi phí và số lượt còn lại; chỉ chạy khi bấm OK. Tối đa 3 lượt mỗi ngày.
 - **Nguồn:** bật/tắt từng nguồn. **Tìm kiếm trả phí:** chi tiêu trong tháng và số dư credit ước tính; sau mỗi lần nạp credit ở Google AI Studio, bấm **Nhập lần nạp credit**.
 - **Số ngày giữ tin:** tin không còn thấy trên nguồn quá 30 ngày tự bị xóa (đổi bằng **Đổi số ngày giữ tin**, tối thiểu 21 ngày). Nút **Dọn ngay** ở trang Vận hành của bảng tin tài chính cũng dọn tin việc làm cũ.
