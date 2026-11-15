@@ -1,11 +1,13 @@
+import { slug } from '../filter.ts';
 import type { FoundJob } from '../types.ts';
 
 // ITviec blocks GitHub Actions (HTTP 403) but Jina Reader can read it, so the listing arrives as markdown.
 
-export const ITVIEC_LISTINGS = [
-  'https://itviec.com/it-jobs/android/ho-chi-minh-hcm',
-  'https://itviec.com/it-jobs/mobile-apps/ho-chi-minh-hcm',
-] as const;
+// The keyword search is loose (it also returns related jobs); the title filter removes those.
+
+export function itviecListing(keyword: string): string {
+  return `https://itviec.com/it-jobs/${slug(keyword)}/ho-chi-minh-hcm`;
+}
 
 const UNIT_MS = { minute: 60_000, hour: 3_600_000, day: 86_400_000 } as const;
 // One card: "Posted 2 days ago", the title link, then logo, work mode and city lines.

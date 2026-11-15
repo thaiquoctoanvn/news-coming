@@ -1,6 +1,6 @@
 import type { SearchBudget, SearchSpend, SearchUsage } from './search/budget.ts';
 
-// Job board pipeline (docs/JOBS_PLAN.md): Android / mobile postings for the admin only.
+// Job board pipeline (docs/JOBS_PLAN.md): postings matching the profiles' keywords, for the admin only.
 
 export type JobSourceKind = 'direct' | 'listing_only' | 'search_only' | 'engine';
 export type Verification = 'pending' | 'verified' | 'unverified' | 'closed';
@@ -12,6 +12,8 @@ export interface JobProfile {
   readonly id: string;
   readonly title: string;
   readonly text: string;
+  /** What this profile looks for: searched on every site, and a posting's title must contain one of them. */
+  readonly keywords: readonly string[];
 }
 
 export interface JobSource {
@@ -138,8 +140,8 @@ export interface JobStore {
   updateJob(id: string, patch: JobPatch): Promise<void>;
   loadPending(limit: number): Promise<PendingJob[]>;
   saveVerification(id: string, result: VerificationResult): Promise<void>;
-  /** Open jobs seen since `seenSince` that this profile has not scored yet, oldest first. */
-  loadUnscored(profileId: string, seenSince: Date, limit: number): Promise<UnscoredJob[]>;
+  /** Open jobs seen since `seenSince` that match the profile's keywords and that it has not scored yet, oldest first. */
+  loadUnscored(profile: JobProfile, seenSince: Date, limit: number): Promise<UnscoredJob[]>;
   saveScore(jobId: string, profileId: string, score: JobScore, reportDate: string): Promise<void>;
   loadReport(profileId: string, reportDate: string): Promise<ReportedJob[]>;
   saveTiers(profileId: string, tiers: ReadonlyArray<{ readonly id: string; readonly tier: JobTier }>): Promise<void>;

@@ -1,7 +1,7 @@
 -- Job board access contract (docs/JOBS_PLAN.md §5). Run with: supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(31);
 
 insert into public.jobs (source_id, url, url_hash, title, verification, report_date)
 values ('itviec', 'https://example.com/job-1', 'job-1', 'Android Developer', 'verified', current_date);
@@ -28,7 +28,18 @@ select results_eq(
   'the migration creates the first profile'
 );
 select throws_ok(
-  $$ insert into public.job_profiles (title, profile_text) values ('  ', 'Kotlin') $$, '23514', null, 'a profile needs a title'
+  $$ insert into public.job_profiles (title, profile_text, keywords) values ('  ', 'Kotlin', '{android}') $$, '23514', null, 'a profile needs a title'
+);
+select results_eq(
+  $$ select keywords from public.job_profiles $$, $$ values ('{android,mobile}'::text[]) $$,
+  'the first profile keeps the android / mobile scope'
+);
+select throws_ok(
+  $$ insert into public.job_profiles (title, profile_text) values ('Flutter', 'Flutter') $$, '23502', null, 'a profile needs keywords'
+);
+select throws_ok(
+  $$ insert into public.job_profiles (title, profile_text, keywords) values ('Flutter', 'Flutter', '{a,b1,c1,d1,e1,f1}') $$,
+  '23514', null, 'keywords are limited in number and length'
 );
 
 -- ===== Public visitor =====
@@ -75,7 +86,7 @@ select throws_ok(
 );
 select throws_ok($$ update public.job_scores set score = 10 $$, '42501', null, 'admin cannot edit scores');
 select lives_ok(
-  $$ insert into public.job_profiles (title, profile_text) values ('Flutter', 'Flutter, 3 năm') $$, 'admin adds a profile'
+  $$ insert into public.job_profiles (title, profile_text, keywords) values ('Flutter', 'Flutter, 3 năm', '{flutter,react native}') $$, 'admin adds a profile'
 );
 select results_eq($$ select score::int from public.job_scores $$, $$ values (8) $$, 'admin reads scores');
 

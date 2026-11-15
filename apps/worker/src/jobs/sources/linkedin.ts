@@ -11,8 +11,6 @@ export function linkedInListing(keywords: string): string {
   return `${SEARCH}?${params}`;
 }
 
-export const LINKEDIN_LISTINGS = [linkedInListing('Android'), linkedInListing('Mobile Developer')] as const;
-
 const pick = (card: string, pattern: RegExp): string | null => textOrNull(pattern.exec(card)?.[1]);
 
 export function parseLinkedIn(html: string): FoundJob[] {

@@ -1,17 +1,19 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from 'vitest';
-import { dedupeKey, inLocation, isRecent, matchesKeywords, normalizeUrl, refreshedText, vietnamDate } from '../src/jobs/filter.ts';
+import {
+  MAX_SCAN_KEYWORDS, dedupeKey, inLocation, isRecent, matchesKeywords, normalizeUrl, refreshedText, scanKeywords, vietnamDate,
+} from '../src/jobs/filter.ts';
 import type { PageRead, PageReader } from '../src/jobs/page-reader.ts';
 import { runJobs } from '../src/jobs/run.ts';
 import { assignTiers, buildScoreRequest } from '../src/jobs/score.ts';
 import { type SearchBudget, costOf, refusal } from '../src/jobs/search/budget.ts';
 import { type SearchEngines, discover, toFoundJob } from '../src/jobs/search/discover.ts';
 import { SearchRefusedError, duckDuckGoSearch, geminiSearch } from '../src/jobs/search/engines.ts';
-import { parseCareerViet } from '../src/jobs/sources/careerviet.ts';
-import { parseCake, parseGrab, parseVng } from '../src/jobs/sources/company-pages.ts';
+import { careerVietListing, parseCareerViet } from '../src/jobs/sources/careerviet.ts';
+import { grabListing, parseCake, parseGrab, parseVng } from '../src/jobs/sources/company-pages.ts';
 import type { JobAdapter } from '../src/jobs/sources/index.ts';
-import { parseItviec } from '../src/jobs/sources/itviec.ts';
+import { itviecListing, parseItviec } from '../src/jobs/sources/itviec.ts';
 import { parseLinkedIn } from '../src/jobs/sources/linkedin.ts';
 import { parseVietnamWorks } from '../src/jobs/sources/vietnamworks.ts';
 import type { FoundJob } from '../src/jobs/types.ts';
@@ -131,13 +133,24 @@ describe('company career pages', () => {
 });
 
 describe('job scope and identity', () => {
-  test('keeps android or mobile titles in Ho Chi Minh or remote, from the last 14 days', () => {
-    expect(matchesKeywords('Senior ANDROID Engineer')).toBe(true);
-    expect(matchesKeywords('Mobile Developer (Flutter)')).toBe(true);
-    expect(matchesKeywords('Backend Developer')).toBe(false);
+  test('keeps titles containing a keyword, in Ho Chi Minh or remote, from the last 14 days', () => {
+    const keywords = ['android', 'React Native'];
+    expect(matchesKeywords('Senior ANDROID Engineer', keywords)).toBe(true);
+    expect(matchesKeywords('Mobile Developer (react native)', keywords)).toBe(true);
+    expect(matchesKeywords('Backend Developer', keywords)).toBe(false);
+    expect(matchesKeywords('Android Developer', [])).toBe(false);
     expect(inLocation('Hồ Chí Minh')).toBe(true);
     expect(inLocation('Ho Chi Minh City, Vietnam')).toBe(true);
     expect(inLocation('Remote')).toBe(true);
+  });
+
+  test('a scan searches every profile keyword once, up to the limit, and builds each site address from it', () => {
+    expect(scanKeywords([{ keywords: ['Android', ' mobile '] }, { keywords: ['android', 'React Native', ''] }]))
+      .toEqual(['android', 'mobile', 'react native']);
+    expect(scanKeywords([{ keywords: ['a1', 'a2', 'a3', 'a4', 'a5'] }, { keywords: ['b1', 'b2'] }])).toHaveLength(MAX_SCAN_KEYWORDS);
+    expect(itviecListing('React Native')).toBe('https://itviec.com/it-jobs/react-native/ho-chi-minh-hcm');
+    expect(careerVietListing('kiểm thử')).toBe('https://careerviet.vn/viec-lam/kiem-thu-tai-ho-chi-minh-kl8-vi.html');
+    expect(grabListing('react native')).toBe('https://www.grab.careers/en/jobs/?search=react+native&country=Vietnam');
     expect(inLocation('Hà Nội')).toBe(false);
     expect(inLocation(null)).toBe(true);
     expect(isRecent(new Date('2026-11-01T00:00:00Z'), NOW)).toBe(true);
@@ -290,7 +303,7 @@ describe('runJobs', () => {
 
   test('every enabled profile scores each job and gets its own report; a profile added later catches up', async () => {
     const { store, adapters, reader } = setup([found({})]);
-    store.profiles = [{ id: 'p1', title: 'Android', text: 'Kotlin, 5 năm' }, { id: 'p2', title: 'Flutter', text: 'Flutter, 3 năm' }];
+    store.profiles = [{ id: 'p1', title: 'Android', text: 'Kotlin, 5 năm', keywords: ['android'] }, { id: 'p2', title: 'Flutter', text: 'Flutter, 3 năm', keywords: ['android', 'flutter'] }];
     const prompts: string[] = [];
     const router = {
       complete: async (_role: string, request: { user: string }) => {
@@ -306,19 +319,50 @@ describe('runJobs', () => {
     expect(store.scoreOf('job-1', 'p1')).toMatchObject({ score: 9, tier: 'top', reportDate: '2026-11-14' });
     expect(store.scoreOf('job-1', 'p2')).toMatchObject({ score: 4, tier: 'low', reportDate: '2026-11-14' });
 
-    store.profiles = [...store.profiles, { id: 'p3', title: 'Lead', text: 'Team lead' }];
+    store.profiles = [...store.profiles, { id: 'p3', title: 'Lead', text: 'Team lead', keywords: ['developer'] }];
     expect((await run()).scored).toBe(1);
     expect(store.scoreOf('job-1', 'p3')).toMatchObject({ score: 9, reportDate: '2026-11-14' });
   });
 
-  test('without an enabled profile jobs are collected and verified but not scored', async () => {
-    const { store, adapters, reader } = setup([found({})]);
-    store.profiles = [];
+  test('each profile searches its own keywords and scores only the postings that match them', async () => {
+    const { store, reader } = setup([]);
+    store.profiles = [
+      { id: 'p1', title: 'Android', text: 'Kotlin, 5 năm', keywords: ['android'] },
+      { id: 'p2', title: 'Flutter', text: 'Flutter, 3 năm', keywords: ['flutter'] },
+    ];
+    const searched: string[] = [];
+    const adapters: Record<string, JobAdapter> = {
+      itviec: async (_reader, _now, keywords) => {
+        searched.push(...keywords);
+        return [
+          found({}),
+          found({ url: 'https://itviec.com/it-jobs/flutter-dev-2', title: 'Flutter Developer', company: 'Beta' }),
+          found({ url: 'https://itviec.com/it-jobs/backend-3', title: 'Backend Developer', company: 'Gamma' }),
+        ];
+      },
+    };
 
     const stats = await runJobs({ store, reader, router: scoringRouter(), adapters, engines: NO_SEARCH, trigger: 'manual', now: () => NOW });
 
-    expect(stats).toMatchObject({ inserted: 1, scored: 0 });
-    expect(store.jobs[0]).toMatchObject({ verification: 'verified', reportDate: null });
+    expect(searched).toEqual(['android', 'flutter']);
+    expect(stats).toMatchObject({ inserted: 2, scored: 2 });
+    const flutter = store.jobs.find((job) => job.title === 'Flutter Developer');
+    expect(store.scoreOf('job-1', 'p1')).toBeDefined();
+    expect(store.scoreOf('job-1', 'p2')).toBeUndefined();
+    expect(store.scoreOf(flutter?.id ?? '', 'p2')).toBeDefined();
+    expect(store.scoreOf(flutter?.id ?? '', 'p1')).toBeUndefined();
+  });
+
+  test('without an enabled profile there is nothing to look for, so no site is read', async () => {
+    const { store, reader } = setup([]);
+    store.profiles = [];
+    let reads = 0;
+    const adapters: Record<string, JobAdapter> = { itviec: async () => { reads++; return [found({})]; } };
+
+    const stats = await runJobs({ store, reader, router: scoringRouter(), adapters, engines: NO_SEARCH, trigger: 'manual', now: () => NOW });
+
+    expect(stats).toMatchObject({ found: 0, inserted: 0, scored: 0 });
+    expect(reads).toBe(0);
   });
 
   test('when AI quota runs out the run is partial and unscored jobs wait for the next run', async () => {
@@ -370,6 +414,7 @@ describe('paid search budget', () => {
   });
 
   const enabled = new Set(['topcv', 'jobsgo', 'gemini_search', 'duckduckgo']);
+  const KEYWORDS = ['android', 'mobile'];
   const TOPCV = 'https://www.topcv.vn/viec-lam/android-developer-kotlin/2318679.html';
 
   test('only posting pages become jobs, titled from their own URL', () => {
@@ -392,10 +437,10 @@ describe('paid search budget', () => {
       },
     };
 
-    const result = await discover({ store, engines, enabledSourceIds: enabled, now: NOW });
+    const result = await discover({ store, engines, enabledSourceIds: enabled, keywords: KEYWORDS, now: NOW });
 
     expect(queries).toHaveLength(4);
-    expect(queries[0]).toBe('site:topcv.vn/viec-lam android developer Hồ Chí Minh');
+    expect(queries[0]).toBe('site:topcv.vn/viec-lam android Hồ Chí Minh');
     expect(store.spendRecords).toHaveLength(4);
     expect(store.spendRecords[0]).toMatchObject({ engineId: 'gemini_search', today: '2026-11-14', usage: { searches: 2 } });
     expect(result.sources).toEqual({ gemini_search: { found: 4 } });
@@ -413,7 +458,7 @@ describe('paid search budget', () => {
       sleep: async () => undefined,
     };
 
-    const exhausted = await discover({ store, engines, enabledSourceIds: enabled, now: NOW });
+    const exhausted = await discover({ store, engines, enabledSourceIds: enabled, keywords: KEYWORDS, now: NOW });
     expect([paidCalls, freeCalls]).toEqual([0, 3]);
     expect(exhausted.sources).toEqual({
       gemini_search: { found: 0, error: 'đã chạm ngân sách tìm kiếm của tháng' },
@@ -423,7 +468,7 @@ describe('paid search budget', () => {
     store.spend = spent(0);
     freeCalls = 0;
     const refusing: SearchEngines = { ...engines, gemini: async () => { paidCalls++; throw new SearchRefusedError('Gemini search HTTP 402'); } };
-    const refused = await discover({ store, engines: refusing, enabledSourceIds: enabled, now: NOW });
+    const refused = await discover({ store, engines: refusing, enabledSourceIds: enabled, keywords: KEYWORDS, now: NOW });
     expect([paidCalls, freeCalls]).toEqual([1, 3]);
     expect(refused.sources.gemini_search).toEqual({ found: 0, error: 'Gemini search HTTP 402' });
     expect(store.spendRecords).toHaveLength(0);
@@ -433,7 +478,7 @@ describe('paid search budget', () => {
     const store = new MemoryJobStore([]);
     let freeCalls = 0;
     const result = await discover({
-      store, engines: { ...NO_SEARCH, duckDuckGo: async () => { freeCalls++; return []; } }, enabledSourceIds: enabled, now: NOW,
+      store, engines: { ...NO_SEARCH, duckDuckGo: async () => { freeCalls++; return []; } }, enabledSourceIds: enabled, keywords: KEYWORDS, now: NOW,
     });
     expect(freeCalls).toBe(3);
     expect(result.sources).toEqual({});

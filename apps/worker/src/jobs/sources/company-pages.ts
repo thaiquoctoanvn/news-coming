@@ -53,10 +53,10 @@ export function parseVng(html: string): { jobs: FoundJob[]; pages: number } {
 // ===== Grab: server-rendered search results for Vietnam. =====
 
 const GRAB_ORIGIN = 'https://www.grab.careers';
-export const GRAB_LISTINGS = [
-  `${GRAB_ORIGIN}/en/jobs/?search=android&country=Vietnam`,
-  `${GRAB_ORIGIN}/en/jobs/?search=mobile&country=Vietnam`,
-] as const;
+
+export function grabListing(keyword: string): string {
+  return `${GRAB_ORIGIN}/en/jobs/?${new URLSearchParams({ search: keyword, country: 'Vietnam' })}`;
+}
 
 export function parseGrab(html: string): FoundJob[] {
   const cards = html.split(/(?=<div class="card card-job")/).slice(1);

@@ -26,7 +26,7 @@
 - Minimize AI token use: deterministic code for fetching, dedup and filtering; AI only for scoring, summarizing and translating the few items that are actually shown.
 - Never stop on quota: every pipeline step is idempotent and resumable; running out of quota delays work, it does not break the system.
 - Deliver a short, prioritized Vietnamese digest (10–12 items) on **one product topic: finance & geopolitics** (`macro_finance`), with configuration fully driven from the database and toggleable at every level. The schema stays topic-scoped, but the UI no longer manages topics or entities.
-- A second, **admin-only** area: a daily Android / mobile job board (`/viec-lam`). It is not a topic, has its own tables, and is never public (`@docs/DESIGN.md` §17, `@docs/JOBS_PLAN.md`).
+- A second, **admin-only** area: a daily job board (`/viec-lam`) that searches each profile's own keywords (Android / mobile by default). It is not a topic, has its own tables, and is never public (`@docs/DESIGN.md` §17, `@docs/JOBS_PLAN.md`).
 - Keep the public site safe: public read only for enabled topics; all writes and quota-consuming actions are admin-only and enforced in Postgres (RLS).
 
 ---
