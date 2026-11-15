@@ -17,7 +17,7 @@ Routine cũ **không** gửi email; pipeline mới cũng không gửi email hay 
 | Chủ đề | Quyết định |
 |---|---|
 | Nơi chạy | Worker trên GitHub Actions, 1 lần/ngày lúc 07:45 giờ Việt Nam, có nút chạy tay |
-| Điều kiện lấy tin | Tiêu đề có `android` hoặc `mobile`; Hồ Chí Minh hoặc remote nhận người ở Việt Nam; đăng/làm mới trong 14 ngày. Không có truy vấn riêng cho POS/PAX/Sunmi |
+| Điều kiện lấy tin | Tiêu đề chứa một từ khoá của hồ sơ (ban đầu là `android`, `mobile`; từ 2026-11-16 mỗi hồ sơ tự đặt, xem dòng "Từ khoá tìm kiếm"); Hồ Chí Minh hoặc remote nhận người ở Việt Nam; đăng/làm mới trong 14 ngày. Không có truy vấn riêng cho POS/PAX/Sunmi |
 | Loại tin | Chỉ bằng code: sai từ khóa, sai địa điểm, quá 14 ngày, có dấu hiệu hết hạn |
 | Hồ sơ CV | **Chỉ dùng để chấm điểm**, không bao giờ dùng để loại tin. Tin điểm thấp vẫn hiển thị |
 | Tin không đọc được trang chi tiết | Vẫn hiển thị trong nhóm "Chưa xác minh" kèm ghi chú; người dùng tự bấm link kiểm tra |
@@ -29,8 +29,9 @@ Routine cũ **không** gửi email; pipeline mới cũng không gửi email hay 
 | Giữ tin | 30 ngày kể từ lần cuối còn thấy trên nguồn (chỉnh được, tối thiểu 21); tin đã đóng 30 ngày; nội dung trang tin 7 ngày sau khi báo |
 | Nút "Quét ngay" | Có hộp cảnh báo, chỉ chạy khi bấm OK; tối đa 3 lượt/ngày, chặn ở Edge Function `trigger-jobs` |
 | Hồ sơ chấm điểm | Nhiều hồ sơ, mỗi hồ sơ bắt buộc có tiêu đề; quét, chấm và lưu theo từng hồ sơ; trang bản tin xem theo từng hồ sơ (chốt 2026-11-16) |
+| Từ khoá tìm kiếm | Mỗi hồ sơ có 1–5 từ khoá riêng (bắt buộc). Một lần quét tìm tất cả từ khoá của các hồ sơ đang bật trên mọi nguồn, tối đa 6 từ khoá (lấy theo thứ tự hồ sơ cũ trước); mỗi hồ sơ chỉ chấm tin có tiêu đề chứa từ khoá của nó. Không có hồ sơ nào bật thì không quét nguồn nào. Trần 1 USD/tháng của tìm kiếm trả phí không đổi (chốt 2026-11-16) |
 | Quản trị | Mỗi khu vực tin có trang quản trị riêng (`/quan-tri` cho tài chính, `/viec-lam/quan-tri` cho việc làm), chấp nhận lặp giao diện |
-| Trang bản tin việc làm | Mở cùng tab (không mở tab mới); lưới 3 cột; bấm thẻ mở popup chi tiết |
+| Trang bản tin việc làm | Mở cùng tab (không mở tab mới); lưới 3 cột; bấm thẻ mở popup chi tiết; mỗi thẻ có sẵn nút "Xem tin" mở tin gốc (chốt 2026-11-15) |
 | Trang tuyển dụng công ty | Thử Gemini trước; không ra thì viết code đọc riêng (kết quả: phải viết riêng, xem §9) |
 
 ## 3. Kết quả thử nghiệm (nhánh `spike/job-sources`, chạy trên GitHub Actions 2026-11-14)
@@ -115,7 +116,7 @@ có đường nào lộ ra ngoài. Không cấp quyền nào cho `anon`.
 
 1. **Đọc trực tiếp** các nguồn `direct` đang bật (mỗi nguồn một adapter nhỏ, test bằng fixture).
 2. **Tìm kiếm** cho nguồn bị chặn (TopCV, JobsGo, Indeed) và truy vấn chung
-   ("android developer", "mobile developer" + Hồ Chí Minh / remote Vietnam):
+   (từng từ khoá của các hồ sơ đang bật + "Hồ Chí Minh"):
    Gemini tìm Google (trong ngân sách §4) → DuckDuckGo → bỏ qua.
    Link grounding của Gemini là link chuyển hướng: lấy header `location` để ra link thật.
 3. **Danh sách không xác minh được** (Glassdoor qua Jina).
@@ -199,7 +200,7 @@ kết quả tìm kiếm; truy vấn TopCV đối chứng trong cùng lần chạ
 | Trang | Cách đọc |
 |---|---|
 | VNG | Trang Next.js nhúng danh sách việc trong `__NEXT_DATA__` (kèm mô tả). Tìm theo từ khóa bị bỏ qua ở server → đọc hết các trang `?page=N` (khoảng 7 trang) rồi lọc tiêu đề. Link tin: `/tim-kiem-viec-lam/chi-tiet/<slug>` |
-| Grab | Kết quả tìm kiếm render sẵn: `/en/jobs/?search=android&country=Vietnam` và `search=mobile` |
+| Grab | Kết quả tìm kiếm render sẵn: `/en/jobs/?search=<từ khoá>&country=Vietnam`, mỗi từ khoá một lần |
 | Cake | Danh sách render sẵn ở `/tuyen-dung/jobs`. Mã văn phòng "HN" = Hà Nội; mã không rõ ("HO") để trống địa điểm |
 
 Các trang này không có ngày đăng, nên tin được báo một lần rồi nhắc lại mỗi 14 ngày khi còn mở.

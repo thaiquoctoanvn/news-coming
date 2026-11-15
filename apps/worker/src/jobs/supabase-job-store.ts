@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { matchesKeywords } from './filter.ts';
 import { type SearchBudget, type SearchSpend, type SearchUsage, searchBudgetSchema } from './search/budget.ts';
 import type {
   JobPatch, JobProfile, JobRunStats, JobScore, JobSource, JobStore, JobTier, JobTrigger, KnownJob, NewJob,
@@ -43,11 +44,11 @@ class SupabaseJobStore implements JobStore {
   }
 
   async loadProfiles(): Promise<JobProfile[]> {
-    const { data, error } = await this.db.from('job_profiles').select('id, title, profile_text').eq('enabled', true).order('created_at');
+    const { data, error } = await this.db.from('job_profiles').select('id, title, profile_text, keywords').eq('enabled', true).order('created_at');
     if (error) throw new Error(`load job profiles: ${error.message}`);
-    return (data as Array<{ id: string; title: string; profile_text: string }>)
+    return (data as Array<{ id: string; title: string; profile_text: string; keywords: string[] }>)
       .filter((row) => row.profile_text.trim() !== '')
-      .map((row) => ({ id: row.id, title: row.title, text: row.profile_text.trim() }));
+      .map((row) => ({ id: row.id, title: row.title, text: row.profile_text.trim(), keywords: row.keywords }));
   }
 
   async loadSearchBudget(): Promise<SearchBudget | null> {
@@ -181,16 +182,17 @@ class SupabaseJobStore implements JobStore {
     if (error) throw new Error(`save verification: ${error.message}`);
   }
 
-  async loadUnscored(profileId: string, seenSince: Date, limit: number): Promise<UnscoredJob[]> {
+  async loadUnscored(profile: JobProfile, seenSince: Date, limit: number): Promise<UnscoredJob[]> {
     if (limit <= 0) return [];
     const open = await this.db.from('jobs').select('id, title, company, location, salary, detail_text')
       .in('verification', ['verified', 'unverified']).gte('last_seen_at', seenSince.toISOString())
       .order('first_seen_at').limit(UNSCORED_SCAN);
     if (open.error) throw new Error(`load unscored jobs: ${open.error.message}`);
-    const rows = open.data as Array<Omit<UnscoredJob, 'detailText'> & { detail_text: string | null }>;
+    const rows = (open.data as Array<Omit<UnscoredJob, 'detailText'> & { detail_text: string | null }>)
+      .filter((row) => matchesKeywords(row.title, profile.keywords));
     const scored = new Set<string>();
     for (const chunk of chunks(rows.map((row) => row.id), LOOKUP_CHUNK)) {
-      const { data, error } = await this.db.from('job_scores').select('job_id').eq('profile_id', profileId).in('job_id', chunk);
+      const { data, error } = await this.db.from('job_scores').select('job_id').eq('profile_id', profile.id).in('job_id', chunk);
       if (error) throw new Error(`load job scores: ${error.message}`);
       for (const row of data as Array<{ job_id: string }>) scored.add(row.job_id);
     }

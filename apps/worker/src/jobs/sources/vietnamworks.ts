@@ -5,7 +5,6 @@ import { textOrNull } from './html.ts';
 // VietnamWorks' own search API: postings come with expiry date and full text, so no page read is needed.
 
 export const VIETNAMWORKS_SEARCH = 'https://ms.vietnamworks.com/job-search/v1.0/search';
-export const VIETNAMWORKS_QUERIES = ['android', 'mobile developer'] as const;
 const MAX_DETAIL_CHARS = 4_000;
 
 const responseSchema = z.object({

@@ -66,25 +66,47 @@ export interface JobProfile {
   /** Required; shown on the job page to pick this profile's report. */
   readonly title: string;
   readonly text: string;
+  /** Searched on every site; the profile only scores postings whose title contains one of them. */
+  readonly keywords: readonly string[];
   readonly enabled: boolean;
 }
 
 export const MAX_PROFILE_TITLE_CHARS = 80;
 export const MAX_PROFILE_CHARS = 3_000;
+export const MAX_PROFILE_KEYWORDS = 5;
+/** Keywords one scan searches over all enabled profiles (same limit as the worker's). */
+export const MAX_SCAN_KEYWORDS = 6;
+const KEYWORD_CHARS = { min: 2, max: 40 };
+
+/** "Android, React Native" → ["android", "react native"]; throws a message for the form when invalid. */
+export function parseKeywords(input: string): string[] {
+  const keywords = [...new Set(input.split(/[,\n|]/).map((keyword) => keyword.trim().toLowerCase()).filter(Boolean))];
+  if (keywords.length === 0) throw new Error('Cần nhập ít nhất một từ khoá tìm kiếm');
+  if (keywords.length > MAX_PROFILE_KEYWORDS) throw new Error(`Mỗi hồ sơ tối đa ${MAX_PROFILE_KEYWORDS} từ khoá`);
+  const bad = keywords.find((keyword) => keyword.length < KEYWORD_CHARS.min || keyword.length > KEYWORD_CHARS.max);
+  if (bad) throw new Error(`Từ khoá “${bad}” phải dài từ ${KEYWORD_CHARS.min} đến ${KEYWORD_CHARS.max} ký tự`);
+  return keywords;
+}
+
+/** The keywords a scan really searches: every enabled profile's, each once, oldest profile first. */
+export function scanKeywords(profiles: readonly JobProfile[]): { used: string[]; skipped: string[] } {
+  const all = [...new Set(profiles.filter((profile) => profile.enabled).flatMap((profile) => profile.keywords))];
+  return { used: all.slice(0, MAX_SCAN_KEYWORDS), skipped: all.slice(MAX_SCAN_KEYWORDS) };
+}
 
 export async function fetchJobProfiles(db: SupabaseClient): Promise<JobProfile[]> {
   const rows = check(
-    await db.from('job_profiles').select('id, title, profile_text, enabled').order('created_at'),
+    await db.from('job_profiles').select('id, title, profile_text, keywords, enabled').order('created_at'),
     'job_profiles',
-  ) as Array<{ id: string; title: string; profile_text: string; enabled: boolean }>;
-  return rows.map((row) => ({ id: row.id, title: row.title, text: row.profile_text, enabled: row.enabled }));
+  ) as Array<{ id: string; title: string; profile_text: string; keywords: string[]; enabled: boolean }>;
+  return rows.map((row) => ({ id: row.id, title: row.title, text: row.profile_text, keywords: row.keywords, enabled: row.enabled }));
 }
 
-/** Creates a profile (no id) or updates one. The title is required here and in the database. */
-export async function saveJobProfile(db: SupabaseClient, profile: { id?: string; title: string; text: string }): Promise<void> {
+/** Creates a profile (no id) or updates one. Title and keywords are required here and in the database. */
+export async function saveJobProfile(db: SupabaseClient, profile: { id?: string; title: string; text: string; keywords: string }): Promise<void> {
   const title = profile.title.trim();
   if (!title) throw new Error('Cần nhập tiêu đề hồ sơ');
-  const row = { title, profile_text: profile.text.trim() };
+  const row = { title, profile_text: profile.text.trim(), keywords: parseKeywords(profile.keywords) };
   const request = profile.id
     ? db.from('job_profiles').update(row).eq('id', profile.id).select('id')
     : db.from('job_profiles').insert(row).select('id');

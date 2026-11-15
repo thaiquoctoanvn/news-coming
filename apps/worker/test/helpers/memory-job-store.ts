@@ -1,3 +1,4 @@
+import { matchesKeywords } from '../../src/jobs/filter.ts';
 import type { SearchBudget, SearchSpend, SearchUsage } from '../../src/jobs/search/budget.ts';
 import type {
   JobPatch, JobProfile, JobRunStats, JobScore, JobSource, JobStore, JobTier, KnownJob, NewJob, PendingJob,
@@ -16,7 +17,7 @@ export interface MemoryJob extends NewJob {
 export class MemoryJobStore implements JobStore {
   jobs: MemoryJob[] = [];
   runs: Array<{ id: string; status: string; stats: JobRunStats | null; error: string | null }> = [];
-  profiles: JobProfile[] = [{ id: 'p1', title: 'Android', text: 'Kotlin, 5 năm' }];
+  profiles: JobProfile[] = [{ id: 'p1', title: 'Android', text: 'Kotlin, 5 năm', keywords: ['android', 'mobile'] }];
   scores: Array<JobScore & { jobId: string; profileId: string; tier: JobTier | null; reportDate: string }> = [];
   budget: SearchBudget | null = null;
   spend: SearchSpend = { monthCostUsd: 0, monthSearches: 0, todayCostUsd: 0 };
@@ -102,9 +103,10 @@ export class MemoryJobStore implements JobStore {
     });
   }
 
-  async loadUnscored(profileId: string, _seenSince: Date, limit: number): Promise<UnscoredJob[]> {
+  async loadUnscored(profile: JobProfile, _seenSince: Date, limit: number): Promise<UnscoredJob[]> {
     return this.jobs
-      .filter((job) => (job.verification === 'verified' || job.verification === 'unverified') && !this.scoreOf(job.id, profileId))
+      .filter((job) => (job.verification === 'verified' || job.verification === 'unverified') && !this.scoreOf(job.id, profile.id))
+      .filter((job) => matchesKeywords(job.title, profile.keywords))
       .slice(0, Math.max(0, limit));
   }
 

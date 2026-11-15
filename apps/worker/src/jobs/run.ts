@@ -1,6 +1,6 @@
 import { errorMessage, log } from '../log.ts';
 import { AiUnavailableError, type AiRouter } from '../shared.ts';
-import { dedupeKey, inScope, normalizeUrl, refreshedText, urlHash, vietnamDate } from './filter.ts';
+import { dedupeKey, inScope, normalizeUrl, refreshedText, scanKeywords, urlHash, vietnamDate } from './filter.ts';
 import type { PageReader } from './page-reader.ts';
 import { type SearchEngines, discover } from './search/discover.ts';
 import { SCORE_BATCH, assignTiers, scoreBatch } from './score.ts';
@@ -65,12 +65,18 @@ async function collect(options: JobRunOptions, now: Date): Promise<{ candidates:
       if (!byHash.has(candidate.urlHash)) byHash.set(candidate.urlHash, candidate);
     }
   };
+  // Every enabled profile's keywords are searched once; each profile later scores only its own matches.
+  const keywords = scanKeywords(await options.store.loadProfiles());
+  if (keywords.length === 0) {
+    log.warn('no enabled profile with keywords; nothing to look for');
+    return { candidates: [], sources };
+  }
   const enabled = await options.store.loadSources();
   for (const source of enabled) {
     const adapter = source.kind === 'direct' ? options.adapters[source.id] : undefined;
     if (!adapter) continue;
     try {
-      const found = (await adapter(options.reader, now)).filter((job) => inScope(job, now));
+      const found = (await adapter(options.reader, now, keywords)).filter((job) => inScope(job, now, keywords));
       add(found);
       sources[source.id] = { found: found.length };
     } catch (error: unknown) {
@@ -81,9 +87,9 @@ async function collect(options: JobRunOptions, now: Date): Promise<{ candidates:
   }
   // Sites read directly come first, so a posting found both ways keeps its richer listing data.
   const searched = await discover({
-    store: options.store, engines: options.engines, enabledSourceIds: new Set(enabled.map((source) => source.id)), now,
+    store: options.store, engines: options.engines, enabledSourceIds: new Set(enabled.map((source) => source.id)), keywords, now,
   });
-  add(searched.jobs.filter((job) => inScope(job, now)));
+  add(searched.jobs.filter((job) => inScope(job, now, keywords)));
   return { candidates: [...byHash.values()], sources: { ...sources, ...searched.sources } };
 }
 
@@ -172,17 +178,16 @@ async function verify(options: JobRunOptions, now: Date): Promise<{ closed: numb
   return { closed, unverified };
 }
 
-/** Scores every pending job once per enabled profile; each profile gets its own report for today. */
+/** Scores every pending job that matches a profile's keywords, once per enabled profile; each profile gets its own report for today. */
 async function score(options: JobRunOptions, now: Date): Promise<{ scored: number; stopped: string | null }> {
   const { store } = options;
   const today = vietnamDate(now);
   const seenSince = new Date(now.getTime() - SCORE_WINDOW_DAYS * DAY_MS);
   const profiles = await store.loadProfiles();
-  if (profiles.length === 0) log.warn('no enabled scoring profile; jobs stay unscored');
-  let scored = 0;
+    let scored = 0;
   let stopped: string | null = null;
   for (const profile of profiles) {
-    const jobs = stopped ? [] : await store.loadUnscored(profile.id, seenSince, MAX_SCORE_PER_RUN - scored);
+    const jobs = stopped ? [] : await store.loadUnscored(profile, seenSince, MAX_SCORE_PER_RUN - scored);
     for (let start = 0; start < jobs.length && !stopped; start += SCORE_BATCH) {
       const batch = jobs.slice(start, start + SCORE_BATCH);
       try {
