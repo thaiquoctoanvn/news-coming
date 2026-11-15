@@ -5,12 +5,13 @@ import { FIELD_INPUT, Field, FormDialog } from '../../components/FormDialog.tsx'
 import { Toggle } from '../../components/Toggle.tsx';
 import { formatShortDate, formatTime, vietnamDay } from '../../lib/format.ts';
 import {
-  type JobSource, MIN_RETENTION_DAYS, fetchJobProfile, fetchJobRetentionDays, fetchJobRuns, fetchJobSources,
-  fetchSearchStatus, saveJobProfile, saveJobRetentionDays, saveSearchCredit, setJobSourceEnabled,
+  type JobSource, MIN_RETENTION_DAYS, fetchJobRetentionDays, fetchJobRuns, fetchJobSources,
+  fetchSearchStatus, saveJobRetentionDays, saveSearchCredit, setJobSourceEnabled,
 } from '../../lib/jobs-api.ts';
 import { useSupabase } from '../../lib/supabase.ts';
-import { creditStatus } from '../jobs/job-view.ts';
-import { ScanJobsButton } from '../jobs/ScanJobsButton.tsx';
+import { creditStatus } from './job-view.ts';
+import { ProfilesSection } from './ProfilesSection.tsx';
+import { ScanJobsButton } from './ScanJobsButton.tsx';
 
 const STATUS_COLOR: Readonly<Record<string, 'success' | 'warning' | 'danger' | 'default'>> = {
   success: 'success', partial: 'warning', failed: 'danger', running: 'default',
@@ -21,21 +22,19 @@ const KIND_LABEL: Readonly<Record<JobSource['kind'], string>> = {
   search_only: 'Qua tìm kiếm',
   engine: 'Công cụ tìm kiếm',
 };
-const MAX_PROFILE_CHARS = 3_000;
 
-type Dialog = 'profile' | 'credit' | 'retention' | null;
+type Dialog = 'credit' | 'retention' | null;
 
 const DIALOG_QUERY: Readonly<Record<Exclude<Dialog, null>, string>> = {
-  profile: 'job-profile', credit: 'job-search-status', retention: 'job-retention',
+  credit: 'job-search-status', retention: 'job-retention',
 };
 
-/** Job board block of the operations page: last runs, sources, search spend, scoring profile. */
-export function JobsOperations() {
+/** The job board's own admin page: scan, scoring profiles, sources, search spend, retention and recent runs. */
+export function JobsAdminPage() {
   const db = useSupabase();
   const queryClient = useQueryClient();
   const [dialog, setDialog] = useState<Dialog>(null);
   const [error, setError] = useState<string | null>(null);
-  const [profileText, setProfileText] = useState('');
   const [creditUsd, setCreditUsd] = useState('5');
   const [creditDate, setCreditDate] = useState(vietnamDay(new Date()));
   const [retentionDays, setRetentionDays] = useState('30');
@@ -43,7 +42,6 @@ export function JobsOperations() {
   const runs = useQuery({ queryKey: ['job-runs', 5], queryFn: () => fetchJobRuns(db, 5), refetchInterval: 60_000 });
   const sources = useQuery({ queryKey: ['job-sources'], queryFn: () => fetchJobSources(db) });
   const search = useQuery({ queryKey: ['job-search-status'], queryFn: () => fetchSearchStatus(db) });
-  const profile = useQuery({ queryKey: ['job-profile'], queryFn: () => fetchJobProfile(db) });
   const retention = useQuery({ queryKey: ['job-retention'], queryFn: () => fetchJobRetentionDays(db) });
 
   const toggle = useMutation({
@@ -52,7 +50,6 @@ export function JobsOperations() {
   });
   const save = useMutation({
     mutationFn: async () => {
-      if (dialog === 'profile') return saveJobProfile(db, profileText);
       if (dialog === 'retention') {
         const days = Number(retentionDays);
         if (!Number.isInteger(days) || days < MIN_RETENTION_DAYS || days > 365) throw new Error(`Số ngày phải từ ${MIN_RETENTION_DAYS} đến 365`);
@@ -72,7 +69,6 @@ export function JobsOperations() {
 
   const open = (next: Exclude<Dialog, null>) => {
     setError(null);
-    if (next === 'profile') setProfileText(profile.data ?? '');
     if (next === 'credit' && search.data?.creditUsd) {
       setCreditUsd(String(search.data.creditUsd));
       setCreditDate(search.data.creditDate ?? vietnamDay(new Date()));
@@ -86,8 +82,8 @@ export function JobsOperations() {
   const sourceName = (id: string) => sources.data?.find((source) => source.id === id)?.name ?? id;
 
   return (
-    <section aria-labelledby="jobs-ops-heading" className="flex flex-col gap-4">
-      <h2 id="jobs-ops-heading" className="font-serif text-lg font-semibold">Việc làm</h2>
+    <div className="flex flex-col gap-6">
+      <h1 className="font-serif text-2xl font-bold">Quản trị việc làm</h1>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <p className="min-w-0 flex-1 text-sm text-muted">
           Quét lúc 07:45 mỗi sáng. Tin không còn thấy trên nguồn quá <strong className="text-foreground">{retention.data ?? 30} ngày</strong> tự bị xóa lúc 03:10;
@@ -97,7 +93,9 @@ export function JobsOperations() {
         <ScanJobsButton />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <ProfilesSection />
+
+      <div className="grid gap-6">
         <Card className="gap-3 p-5">
           <Card.Title className="text-base font-semibold">Tìm kiếm trả phí (Gemini)</Card.Title>
           {search.isError && <p className="text-sm text-danger">Không tải được: {search.error.message}</p>}
@@ -117,14 +115,6 @@ export function JobsOperations() {
           <div><Button size="sm" variant="secondary" onPress={() => open('credit')}>Nhập lần nạp credit</Button></div>
         </Card>
 
-        <Card className="gap-3 p-5">
-          <Card.Title className="text-base font-semibold">Hồ sơ để chấm điểm</Card.Title>
-          <p className="text-sm text-muted">
-            Chỉ dùng để chấm điểm mức phù hợp, không dùng để loại tin. Nội dung được gửi cho AI khi chấm điểm: chỉ ghi kỹ năng và kinh nghiệm, không ghi họ tên, số điện thoại, email, địa chỉ.
-          </p>
-          <p className="line-clamp-3 text-sm">{profile.data || 'Chưa có hồ sơ: đang chấm theo hồ sơ chung "Android developer, mid–senior".'}</p>
-          <div><Button size="sm" variant="secondary" onPress={() => open('profile')}>Sửa hồ sơ</Button></div>
-        </Card>
       </div>
 
       <Card className="gap-3 p-5">
@@ -167,19 +157,6 @@ export function JobsOperations() {
         </table>
       </div>
 
-      {dialog === 'profile' && (
-        <FormDialog title="Hồ sơ để chấm điểm" onSubmit={() => save.mutate()} onClose={() => setDialog(null)} error={error}>
-          <Field label="Kỹ năng, số năm kinh nghiệm, cấp bậc, loại việc mong muốn" hint={`${profileText.length}/${MAX_PROFILE_CHARS} ký tự. Không ghi thông tin cá nhân.`}>
-            <textarea
-              value={profileText}
-              maxLength={MAX_PROFILE_CHARS}
-              rows={10}
-              onChange={(event) => setProfileText(event.target.value)}
-              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-focus"
-            />
-          </Field>
-        </FormDialog>
-      )}
       {dialog === 'retention' && (
         <FormDialog title="Số ngày giữ tin việc làm" onSubmit={() => save.mutate()} onClose={() => setDialog(null)} error={error}>
           <Field label="Số ngày" hint={`Tính từ lần cuối tin còn thấy trên nguồn. Tối thiểu ${MIN_RETENTION_DAYS} ngày. Tin còn được làm mới thì không bị xóa.`}>
@@ -197,6 +174,6 @@ export function JobsOperations() {
           </Field>
         </FormDialog>
       )}
-    </section>
+    </div>
   );
 }

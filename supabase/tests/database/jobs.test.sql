@@ -1,10 +1,12 @@
 -- Job board access contract (docs/JOBS_PLAN.md §5). Run with: supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(28);
 
-insert into public.jobs (source_id, url, url_hash, title, verification, score, tier, report_date)
-values ('itviec', 'https://example.com/job-1', 'job-1', 'Android Developer', 'verified', 8, 'fit', current_date);
+insert into public.jobs (source_id, url, url_hash, title, verification, report_date)
+values ('itviec', 'https://example.com/job-1', 'job-1', 'Android Developer', 'verified', current_date);
+insert into public.job_scores (job_id, profile_id, score, reason, tier, report_date)
+select j.id, p.id, 8, 'Hợp Kotlin.', 'fit', current_date from public.jobs j cross join public.job_profiles p;
 insert into public.job_runs (trigger, status) values ('manual', 'success');
 select public.record_search_spend('gemini_search', current_date, 2, 40, 1500, 0.0012);
 select public.record_search_spend('gemini_search', current_date, 1, 60, 500, 0.0008);
@@ -21,8 +23,18 @@ select results_eq(
   'paid search stops below 1 USD a month'
 );
 
+select results_eq(
+  $$ select title from public.job_profiles $$, $$ values ('Hồ sơ chính'::text) $$,
+  'the migration creates the first profile'
+);
+select throws_ok(
+  $$ insert into public.job_profiles (title, profile_text) values ('  ', 'Kotlin') $$, '23514', null, 'a profile needs a title'
+);
+
 -- ===== Public visitor =====
 set local role anon;
+select throws_ok($$ select * from public.job_profiles $$, '42501', null, 'anon cannot read job profiles');
+select throws_ok($$ select * from public.job_scores $$, '42501', null, 'anon cannot read job scores');
 select throws_ok($$ select * from public.jobs $$, '42501', null, 'anon cannot read jobs');
 select throws_ok($$ select * from public.job_sources $$, '42501', null, 'anon cannot read job sources');
 select throws_ok($$ select * from public.job_runs $$, '42501', null, 'anon cannot read job runs');
@@ -59,8 +71,13 @@ select throws_ok(
   $$ update public.job_sources set name = 'x' where id = 'itviec' $$, '42501', null, 'admin cannot rename a source'
 );
 select throws_ok(
-  $$ update public.jobs set score = 10 where url_hash = 'job-1' $$, '42501', null, 'admin cannot edit jobs'
+  $$ update public.jobs set title = 'x' where url_hash = 'job-1' $$, '42501', null, 'admin cannot edit jobs'
 );
+select throws_ok($$ update public.job_scores set score = 10 $$, '42501', null, 'admin cannot edit scores');
+select lives_ok(
+  $$ insert into public.job_profiles (title, profile_text) values ('Flutter', 'Flutter, 3 năm') $$, 'admin adds a profile'
+);
+select results_eq($$ select score::int from public.job_scores $$, $$ values (8) $$, 'admin reads scores');
 
 -- ===== Retention =====
 reset role;

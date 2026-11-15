@@ -1,12 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, test, vi } from 'vitest';
 import type { Job, SearchStatus } from '../../lib/jobs-api.ts';
 import { afterLoginPath } from '../auth/LoginPage.tsx';
 import { SupabaseContext } from '../../lib/supabase.ts';
 import { JobCard } from './JobCard.tsx';
+import { ProfilesSection } from './ProfilesSection.tsx';
 import { ScanJobsButton } from './ScanJobsButton.tsx';
 import { creditStatus, formatDeadline, groupJobs, highScoreCount } from './job-view.ts';
 
@@ -17,7 +18,7 @@ const job: Job = {
 };
 
 describe('JobCard', () => {
-  test('shows the posting as text with score, terms, reason, CV tip and a safe link', () => {
+  test('the compact card shows the essentials as text and has no link of its own', () => {
     render(<JobCard job={job} sourceName="ITviec" />);
 
     expect(screen.getByRole('heading', { name: 'Senior Android Engineer <b>Kotlin</b>' })).toBeInTheDocument();
@@ -26,25 +27,36 @@ describe('JobCard', () => {
     expect(screen.getByText('Acme · Ho Chi Minh')).toBeInTheDocument();
     expect(screen.getByText('20–45 triệu · Hạn 29/11 · Làm mới 07/11')).toBeInTheDocument();
     expect(screen.getByText('Hợp Kotlin và Compose.')).toBeInTheDocument();
-    expect(screen.getByText(/Nhấn mạnh dự án thanh toán/)).toBeInTheDocument();
-    const link = screen.getByRole('link', { name: /Xem tin/ });
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  test('pressing the card opens a popup with the details, the CV tip and a safe link', async () => {
+    const user = userEvent.setup();
+    render(<JobCard job={job} sourceName="ITviec" />);
+
+    await user.click(screen.getByRole('button', { name: /Xem chi tiết: Senior Android Engineer/ }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('20–45 triệu')).toBeInTheDocument();
+    expect(within(dialog).getByText('29/11')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Nhấn mạnh dự án thanh toán/)).toBeInTheDocument();
+    const link = within(dialog).getByRole('link', { name: /Xem tin/ });
     expect(link).toHaveAttribute('href', 'https://itviec.com/it-jobs/android-1');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
-  test('an unverified posting says why and asks the reader to check it', () => {
-    const unverified: Job = { ...job, tier: 'unverified', verificationNote: 'Không đọc được trang (HTTP 403)', company: null, tip: 'x' };
+  test('an unverified posting says why in the popup and never links to an unsafe URL', async () => {
+    const user = userEvent.setup();
+    const unverified: Job = { ...job, tier: 'unverified', verificationNote: 'Không đọc được trang (HTTP 403)', company: null, url: 'javascript:alert(1)' };
     render(<JobCard job={unverified} sourceName="TopCV" />);
 
     expect(screen.getByText('Chưa xác minh')).toBeInTheDocument();
-    expect(screen.getByText(/Không đọc được trang \(HTTP 403\)\. Bấm “Xem tin” để tự kiểm tra/)).toBeInTheDocument();
-    expect(screen.queryByText(/Nên nhấn mạnh/)).not.toBeInTheDocument();
-  });
-
-  test('does not render a link for unsafe URLs', () => {
-    render(<JobCard job={{ ...job, url: 'javascript:alert(1)' }} sourceName="ITviec" />);
-    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Xem chi tiết/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Không đọc được trang \(HTTP 403\)\. Bấm “Xem tin” để tự kiểm tra/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('link')).not.toBeInTheDocument();
   });
 });
 
@@ -128,5 +140,31 @@ describe('ScanJobsButton', () => {
     setup({ action_quota: [{ count: 3 }] });
     expect(await screen.findByText('Đã dùng hết 3 lượt quét hôm nay.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Quét ngay' })).toBeDisabled();
+  });
+});
+
+describe('ProfilesSection', () => {
+  test('a profile cannot be saved without a title', async () => {
+    const user = userEvent.setup();
+    const insert = vi.fn(() => ({ select: async () => ({ data: [{ id: 'p1' }], error: null }) }));
+    const db = {
+      from: () => ({ select: () => ({ order: async () => ({ data: [], error: null }) }), insert }),
+    } as unknown as SupabaseClient;
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <SupabaseContext.Provider value={db}><ProfilesSection /></SupabaseContext.Provider>
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Thêm hồ sơ' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/Kỹ năng/), 'Kotlin, 5 năm');
+    await user.type(within(dialog).getByLabelText(/Tiêu đề/), '   ');
+    await user.click(within(dialog).getByRole('button', { name: 'OK' }));
+    expect(insert).not.toHaveBeenCalled();
+
+    await user.type(within(dialog).getByLabelText(/Tiêu đề/), 'Android Senior');
+    await user.click(within(dialog).getByRole('button', { name: 'OK' }));
+    expect(insert).toHaveBeenCalledWith({ title: 'Android Senior', profile_text: 'Kotlin, 5 năm' });
   });
 });

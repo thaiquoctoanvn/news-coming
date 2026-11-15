@@ -1,16 +1,12 @@
 import type { SearchBudget, SearchSpend, SearchUsage } from '../../src/jobs/search/budget.ts';
 import type {
-  JobPatch, JobRunStats, JobScore, JobSource, JobStore, JobTier, KnownJob, NewJob, PendingJob,
+  JobPatch, JobProfile, JobRunStats, JobScore, JobSource, JobStore, JobTier, KnownJob, NewJob, PendingJob,
   ReportedJob, UnscoredJob, VerificationResult,
 } from '../../src/jobs/types.ts';
 
 export interface MemoryJob extends NewJob {
   id: string;
   verificationNote: string | null;
-  score: number | null;
-  reason: string | null;
-  tip: string | null;
-  tier: JobTier | null;
   isUpdate: boolean;
   reportDate: string | null;
   lastSeenAt: Date | null;
@@ -20,7 +16,8 @@ export interface MemoryJob extends NewJob {
 export class MemoryJobStore implements JobStore {
   jobs: MemoryJob[] = [];
   runs: Array<{ id: string; status: string; stats: JobRunStats | null; error: string | null }> = [];
-  profile: string | null = null;
+  profiles: JobProfile[] = [{ id: 'p1', title: 'Android', text: 'Kotlin, 5 năm' }];
+  scores: Array<JobScore & { jobId: string; profileId: string; tier: JobTier | null; reportDate: string }> = [];
   budget: SearchBudget | null = null;
   spend: SearchSpend = { monthCostUsd: 0, monthSearches: 0, todayCostUsd: 0 };
   spendRecords: Array<{ engineId: string; today: string; usage: SearchUsage; costUsd: number }> = [];
@@ -34,8 +31,13 @@ export class MemoryJobStore implements JobStore {
     return this.sources;
   }
 
-  async loadProfile(): Promise<string | null> {
-    return this.profile;
+  async loadProfiles(): Promise<JobProfile[]> {
+    return this.profiles;
+  }
+
+  /** Test helper: one profile's score row of a job. */
+  scoreOf(jobId: string, profileId = 'p1') {
+    return this.scores.find((row) => row.jobId === jobId && row.profileId === profileId);
   }
 
   async loadSearchBudget(): Promise<SearchBudget | null> {
@@ -72,8 +74,7 @@ export class MemoryJobStore implements JobStore {
   async insertJobs(jobs: readonly NewJob[]): Promise<void> {
     for (const job of jobs) {
       this.jobs.push({
-        ...job, id: `job-${this.jobs.length + 1}`, verificationNote: null, score: null, reason: null,
-        tip: null, tier: null, isUpdate: false, reportDate: null, lastSeenAt: null,
+        ...job, id: `job-${this.jobs.length + 1}`, verificationNote: null, isUpdate: false, reportDate: null, lastSeenAt: null,
       });
     }
   }
@@ -84,6 +85,8 @@ export class MemoryJobStore implements JobStore {
 
   async updateJob(id: string, patch: JobPatch): Promise<void> {
     this.patch([id], patch);
+    const { reportDate } = patch;
+    if (reportDate !== undefined) this.scores = this.scores.map((row) => (row.jobId === id ? { ...row, reportDate } : row));
   }
 
   async loadPending(limit: number): Promise<PendingJob[]> {
@@ -99,22 +102,27 @@ export class MemoryJobStore implements JobStore {
     });
   }
 
-  async loadUnscored(limit: number): Promise<UnscoredJob[]> {
+  async loadUnscored(profileId: string, _seenSince: Date, limit: number): Promise<UnscoredJob[]> {
     return this.jobs
-      .filter((job) => (job.verification === 'verified' || job.verification === 'unverified') && job.reportDate === null)
-      .slice(0, limit);
+      .filter((job) => (job.verification === 'verified' || job.verification === 'unverified') && !this.scoreOf(job.id, profileId))
+      .slice(0, Math.max(0, limit));
   }
 
-  async saveScore(id: string, score: JobScore, reportDate: string): Promise<void> {
-    this.patch([id], { ...score, reportDate });
+  async saveScore(jobId: string, profileId: string, score: JobScore, reportDate: string): Promise<void> {
+    this.scores.push({ ...score, jobId, profileId, tier: null, reportDate });
+    this.jobs = this.jobs.map((job) => (job.id === jobId && job.reportDate === null ? { ...job, reportDate } : job));
   }
 
-  async loadReport(reportDate: string): Promise<ReportedJob[]> {
-    return this.jobs.filter((job) => job.reportDate === reportDate);
+  async loadReport(profileId: string, reportDate: string): Promise<ReportedJob[]> {
+    return this.scores.filter((row) => row.profileId === profileId && row.reportDate === reportDate).map((row) => ({
+      id: row.jobId, score: row.score, verification: this.jobs.find((job) => job.id === row.jobId)?.verification ?? 'pending',
+    }));
   }
 
-  async saveTiers(tiers: ReadonlyArray<{ readonly id: string; readonly tier: JobTier }>): Promise<void> {
-    for (const { id, tier } of tiers) this.patch([id], { tier });
+  async saveTiers(profileId: string, tiers: ReadonlyArray<{ readonly id: string; readonly tier: JobTier }>): Promise<void> {
+    for (const { id, tier } of tiers) {
+      this.scores = this.scores.map((row) => (row.jobId === id && row.profileId === profileId ? { ...row, tier } : row));
+    }
   }
 
   private patch(ids: readonly string[], patch: Partial<MemoryJob>): void {

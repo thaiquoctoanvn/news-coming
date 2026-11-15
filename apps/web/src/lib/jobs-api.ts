@@ -61,34 +61,80 @@ function check<T>(result: { data: T | null; error: { message: string } | null },
   return result.data as T;
 }
 
-const JOB_COLUMNS = 'id, source_id, url, title, company, location, salary, posted_text, deadline, verification_note, score, reason, tip, tier, is_update';
-const MAX_REPORT_DAYS = 90;
-
-interface JobRow {
-  id: string; source_id: string; url: string; title: string; company: string | null; location: string | null;
-  salary: string | null; posted_text: string | null; deadline: string | null; verification_note: string | null;
-  score: number | null; reason: string | null; tip: string | null; tier: JobTier | null; is_update: boolean;
+export interface JobProfile {
+  readonly id: string;
+  /** Required; shown on the job page to pick this profile's report. */
+  readonly title: string;
+  readonly text: string;
+  readonly enabled: boolean;
 }
 
-/** Days that have a report, newest first. */
-export async function fetchJobDates(db: SupabaseClient): Promise<string[]> {
+export const MAX_PROFILE_TITLE_CHARS = 80;
+export const MAX_PROFILE_CHARS = 3_000;
+
+export async function fetchJobProfiles(db: SupabaseClient): Promise<JobProfile[]> {
   const rows = check(
-    await db.from('jobs').select('report_date').not('report_date', 'is', null).order('report_date', { ascending: false }).limit(2000),
-    'jobs',
+    await db.from('job_profiles').select('id, title, profile_text, enabled').order('created_at'),
+    'job_profiles',
+  ) as Array<{ id: string; title: string; profile_text: string; enabled: boolean }>;
+  return rows.map((row) => ({ id: row.id, title: row.title, text: row.profile_text, enabled: row.enabled }));
+}
+
+/** Creates a profile (no id) or updates one. The title is required here and in the database. */
+export async function saveJobProfile(db: SupabaseClient, profile: { id?: string; title: string; text: string }): Promise<void> {
+  const title = profile.title.trim();
+  if (!title) throw new Error('Cần nhập tiêu đề hồ sơ');
+  const row = { title, profile_text: profile.text.trim() };
+  const request = profile.id
+    ? db.from('job_profiles').update(row).eq('id', profile.id).select('id')
+    : db.from('job_profiles').insert(row).select('id');
+  check(await request, 'job_profiles');
+}
+
+export async function setJobProfileEnabled(db: SupabaseClient, id: string, enabled: boolean): Promise<void> {
+  check(await db.from('job_profiles').update({ enabled }).eq('id', id).select('id'), 'job_profiles');
+}
+
+/** Deletes a profile together with its scores and reports; the postings stay for the other profiles. */
+export async function deleteJobProfile(db: SupabaseClient, id: string): Promise<void> {
+  check(await db.from('job_profiles').delete().eq('id', id).select('id'), 'job_profiles');
+}
+
+const JOB_COLUMNS = 'id, source_id, url, title, company, location, salary, posted_text, deadline, verification, verification_note, is_update';
+const MAX_REPORT_DAYS = 90;
+
+interface ScoreRow {
+  score: number;
+  reason: string;
+  tip: string | null;
+  tier: JobTier | null;
+  jobs: {
+    id: string; source_id: string; url: string; title: string; company: string | null; location: string | null;
+    salary: string | null; posted_text: string | null; deadline: string | null; verification_note: string | null; is_update: boolean;
+  };
+}
+
+/** Days that have a report for one profile, newest first. */
+export async function fetchJobDates(db: SupabaseClient, profileId: string): Promise<string[]> {
+  const rows = check(
+    await db.from('job_scores').select('report_date').eq('profile_id', profileId).order('report_date', { ascending: false }).limit(2000),
+    'job_scores',
   ) as Array<{ report_date: string }>;
   return [...new Set(rows.map((row) => row.report_date))].slice(0, MAX_REPORT_DAYS);
 }
 
-export async function fetchJobs(db: SupabaseClient, reportDate: string): Promise<Job[]> {
+/** One profile's report for a day: its scores joined to the shared postings, closed postings left out. */
+export async function fetchJobs(db: SupabaseClient, profileId: string, reportDate: string): Promise<Job[]> {
   const rows = check(
-    await db.from('jobs').select(JOB_COLUMNS).eq('report_date', reportDate).neq('verification', 'closed')
-      .order('score', { ascending: false, nullsFirst: false }).order('title'),
-    'jobs',
-  ) as JobRow[];
-  return rows.map((row) => ({
-    id: row.id, sourceId: row.source_id, url: row.url, title: row.title, company: row.company, location: row.location,
-    salary: row.salary, postedText: row.posted_text, deadline: row.deadline, verificationNote: row.verification_note,
-    score: row.score, reason: row.reason, tip: row.tip, tier: row.tier ?? 'low', isUpdate: row.is_update,
+    await db.from('job_scores').select(`score, reason, tip, tier, jobs!inner(${JOB_COLUMNS})`)
+      .eq('profile_id', profileId).eq('report_date', reportDate).neq('jobs.verification', 'closed')
+      .order('score', { ascending: false }),
+    'job_scores',
+  ) as unknown as ScoreRow[];
+  return rows.map(({ jobs: job, ...score }) => ({
+    id: job.id, sourceId: job.source_id, url: job.url, title: job.title, company: job.company, location: job.location,
+    salary: job.salary, postedText: job.posted_text, deadline: job.deadline, verificationNote: job.verification_note,
+    score: score.score, reason: score.reason, tip: score.tip, tier: score.tier ?? 'low', isUpdate: job.is_update,
   }));
 }
 
@@ -144,14 +190,6 @@ export async function saveSearchCredit(db: SupabaseClient, creditUsd: number, cr
   const current = (await fetchSetting<Record<string, unknown>>(db, 'job_search_budget')) ?? {};
   const value = { ...current, credit_usd: creditUsd, credit_date: creditDate };
   check(await db.from('app_settings').upsert({ key: 'job_search_budget', value }).select('key'), 'app_settings');
-}
-
-export async function fetchJobProfile(db: SupabaseClient): Promise<string> {
-  return (await fetchSetting<{ text?: string }>(db, 'job_profile'))?.text ?? '';
-}
-
-export async function saveJobProfile(db: SupabaseClient, text: string): Promise<void> {
-  check(await db.from('app_settings').upsert({ key: 'job_profile', value: { text: text.trim() } }).select('key'), 'app_settings');
 }
 
 export interface ScanQuota {

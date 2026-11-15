@@ -7,6 +7,13 @@ export type Verification = 'pending' | 'verified' | 'unverified' | 'closed';
 export type JobTier = 'top' | 'fit' | 'maybe' | 'low' | 'unverified';
 export type JobTrigger = 'schedule' | 'manual';
 
+/** One scoring profile; every enabled profile gets its own scores and daily report. */
+export interface JobProfile {
+  readonly id: string;
+  readonly title: string;
+  readonly text: string;
+}
+
 export interface JobSource {
   readonly id: string;
   readonly kind: JobSourceKind;
@@ -121,8 +128,8 @@ export interface JobStore {
   loadSearchSpend(engineId: string, today: string): Promise<SearchSpend>;
   recordSearchSpend(engineId: string, today: string, usage: SearchUsage, costUsd: number): Promise<void>;
   loadSources(): Promise<JobSource[]>;
-  /** The admin's scoring profile (skills and experience), or null when not set yet. */
-  loadProfile(): Promise<string | null>;
+  /** Enabled scoring profiles, oldest first. */
+  loadProfiles(): Promise<JobProfile[]>;
   startRun(trigger: JobTrigger): Promise<string>;
   finishRun(runId: string, status: 'success' | 'partial' | 'failed', stats: JobRunStats, error: string | null): Promise<void>;
   findKnown(urlHashes: readonly string[], dedupeKeys: readonly string[]): Promise<KnownJob[]>;
@@ -131,8 +138,9 @@ export interface JobStore {
   updateJob(id: string, patch: JobPatch): Promise<void>;
   loadPending(limit: number): Promise<PendingJob[]>;
   saveVerification(id: string, result: VerificationResult): Promise<void>;
-  loadUnscored(limit: number): Promise<UnscoredJob[]>;
-  saveScore(id: string, score: JobScore, reportDate: string): Promise<void>;
-  loadReport(reportDate: string): Promise<ReportedJob[]>;
-  saveTiers(tiers: ReadonlyArray<{ readonly id: string; readonly tier: JobTier }>): Promise<void>;
+  /** Open jobs seen since `seenSince` that this profile has not scored yet, oldest first. */
+  loadUnscored(profileId: string, seenSince: Date, limit: number): Promise<UnscoredJob[]>;
+  saveScore(jobId: string, profileId: string, score: JobScore, reportDate: string): Promise<void>;
+  loadReport(profileId: string, reportDate: string): Promise<ReportedJob[]>;
+  saveTiers(profileId: string, tiers: ReadonlyArray<{ readonly id: string; readonly tier: JobTier }>): Promise<void>;
 }

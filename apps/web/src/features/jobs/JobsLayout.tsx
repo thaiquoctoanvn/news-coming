@@ -1,8 +1,14 @@
-import { Link, Navigate, Outlet } from 'react-router';
+import { Button } from '@heroui/react';
+import { NavLink, Navigate, Outlet } from 'react-router';
 import { AreaSwitch } from '../../components/AreaSwitch.tsx';
 import { LoadingCards } from '../../components/States.tsx';
 import { ThemeToggle } from '../../components/ThemeToggle.tsx';
 import { useAuth } from '../../lib/auth.tsx';
+
+function navClass({ isActive }: { isActive: boolean }): string {
+  const base = 'min-w-0 truncate rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-focus';
+  return isActive ? `${base} bg-foreground text-background` : `${base} text-muted hover:bg-surface hover:text-foreground`;
+}
 
 /** Job board shell: admin only. RLS is the real guard; this only avoids showing an empty page. */
 export function JobsLayout() {
@@ -18,12 +24,14 @@ export function JobsLayout() {
             <span className="block font-serif text-2xl font-bold leading-tight tracking-tight">News Coming</span>
             <span className="block truncate text-xs uppercase tracking-[0.2em] text-muted">Việc làm Android / Mobile</span>
           </div>
-          <AreaSwitch current="jobs" className="order-last w-full md:order-none md:w-auto md:flex-1" />
+          <AreaSwitch current="jobs" className="order-last w-full md:order-none md:w-auto" />
+          <nav aria-label="Mục chính" className="order-last flex w-full min-w-0 items-center gap-1 md:order-none md:w-auto md:flex-1 md:justify-center">
+            <NavLink to="/viec-lam" end className={navClass}>Bản tin</NavLink>
+            <NavLink to="/viec-lam/quan-tri" className={navClass}>Quản trị</NavLink>
+          </nav>
           <div className="flex shrink-0 items-center gap-2">
             <ThemeToggle />
-            <Link to="/quan-tri" className="inline-flex h-8 items-center rounded-full border border-border px-3 text-sm font-medium transition-colors hover:bg-surface focus-visible:outline-2 focus-visible:outline-focus">
-              Quản trị
-            </Link>
+            <Button size="sm" variant="ghost" onPress={() => void auth.signOut()}>Đăng xuất</Button>
           </div>
         </div>
       </header>

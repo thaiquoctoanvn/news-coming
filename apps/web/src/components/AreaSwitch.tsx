@@ -13,7 +13,7 @@ const IDLE = `${BASE} border-border text-muted hover:text-foreground`;
 
 /**
  * Switches between the public finance digest and the admin-only job board.
- * Visitors only have one area, so they see nothing; the job board opens in a new tab.
+ * Visitors only have one area, so they see nothing.
  */
 export function AreaSwitch({ current, className = '' }: Props) {
   const auth = useAuth();
@@ -23,14 +23,9 @@ export function AreaSwitch({ current, className = '' }: Props) {
       <Link to="/" aria-current={current === 'finance' ? 'page' : undefined} className={current === 'finance' ? ACTIVE : IDLE}>
         Tài chính
       </Link>
-      {current === 'jobs' ? (
-        <Link to="/viec-lam" aria-current="page" className={ACTIVE}>Việc làm</Link>
-      ) : (
-        <Link to="/viec-lam" target="_blank" rel="noopener noreferrer" className={IDLE}>
-          Việc làm <span aria-hidden="true">↗</span>
-          <span className="sr-only"> (mở tab mới)</span>
-        </Link>
-      )}
+      <Link to="/viec-lam" aria-current={current === 'jobs' ? 'page' : undefined} className={current === 'jobs' ? ACTIVE : IDLE}>
+        Việc làm
+      </Link>
     </nav>
   );
 }

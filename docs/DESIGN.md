@@ -604,17 +604,19 @@ kết quả thử nguồn và việc còn mở: `docs/JOBS_PLAN.md`.
 
 | Phần | Nơi |
 |---|---|
-| Bảng `job_sources`, `jobs`, `job_runs`, `search_spend`; hàm `record_search_spend`, `purge_old_jobs` (pg_cron 20:10 UTC) | `supabase/migrations/20261115000100_jobs.sql`, `…000200_job_search.sql` |
+| Bảng `job_sources`, `jobs`, `job_profiles`, `job_scores`, `job_runs`, `search_spend`; hàm `record_search_spend`, `purge_old_jobs` (pg_cron 20:10 UTC) | `supabase/migrations/20261115000100_jobs.sql`, `…000200_job_search.sql`, `…000300_job_extras.sql`, `20261116000100_job_profiles.sql` |
 | Pipeline (lệnh `node src/index.ts jobs`) | `apps/worker/src/jobs/` |
 | Lịch chạy 07:45 VN + chạy tay | `.github/workflows/jobs.yml` (từ tag `prod`) |
-| Trang `/viec-lam`, nút chuyển khu vực ở header, khối "Việc làm" ở trang Vận hành | `apps/web/src/features/jobs/`, `components/AreaSwitch.tsx`, `features/admin/JobsOperations.tsx` |
+| Trang `/viec-lam` (bản tin) và `/viec-lam/quan-tri` (quản trị riêng của khu vực việc làm), nút chuyển khu vực ở header | `apps/web/src/features/jobs/`, `components/AreaSwitch.tsx` |
 
 - **Quyền:** `anon` không có grant nào trên 4 bảng; admin chỉ đọc (và bật/tắt `job_sources.enabled`); worker ghi bằng service_role. Test: `supabase/tests/database/jobs.test.sql`.
 - **Pipeline:** đọc nguồn trực tiếp (ITviec qua Jina, VietnamWorks API, LinkedIn, CareerViet, trang tuyển dụng VNG / Grab / Cake) → tìm kiếm cho trang bị chặn (TopCV, JobsGo, TopDev) → lọc bằng code (tiêu đề có `android`/`mobile`, Hồ Chí Minh hoặc remote, làm mới trong 14 ngày) → chống trùng (link, công ty + vị trí) → xác minh trên trang chi tiết (hết hạn thì ẩn, không đọc được thì giữ ở nhóm "Chưa xác minh") → chấm điểm 1–10 bằng router AI free (4 tin/request, ghi `ai_usage` dưới topic đang bật đầu tiên) → xếp nhóm. Mỗi bước lưu trạng thái nên lần chạy sau làm nốt phần dở.
 - **Nhắc lại:** tin đã báo mà vẫn còn trên nguồn sau 14 ngày thì chuyển sang báo cáo hôm nay với tag "Cập nhật", giữ điểm cũ. Lương hoặc hạn nộp đổi cũng báo lại như vậy.
 - **Quét ngay:** nút trên `/viec-lam` và trang Vận hành → hộp cảnh báo → Edge Function `trigger-jobs` (admin, `app_settings.job_scan.daily_cap` = 3 lượt/ngày qua `use_action_quota(…, 'jobs', …)`) → `workflow_dispatch` của `jobs.yml`.
 - **Dọn dữ liệu** (`20261115000300_job_extras.sql`): tin không còn thấy trên nguồn quá `app_settings.job_retention.days` (mặc định 30, tối thiểu 21); tin đã đóng 30 ngày; chữ của trang tin 7 ngày sau khi báo; lịch sử quét 90 ngày; sổ chi tiêu 400 ngày. Nút "Dọn ngay" dọn luôn phần này.
-- **Hồ sơ chấm điểm** (`app_settings.job_profile`) chỉ dùng để chấm điểm, không bao giờ loại tin. Không nằm trong repo.
+- **Hồ sơ chấm điểm** (`job_profiles`): nhiều hồ sơ, mỗi hồ sơ bắt buộc có tiêu đề. Tin (`jobs`) dùng chung; điểm, lý do, gợi ý CV, nhóm và ngày báo lưu theo từng hồ sơ trong `job_scores`. Mỗi lần quét chấm từng tin một lần cho mỗi hồ sơ đang bật; hồ sơ thêm sau chỉ chấm các tin còn thấy trong 14 ngày gần nhất. Hồ sơ chỉ dùng để chấm điểm, không bao giờ loại tin; nội dung không nằm trong repo. Không có hồ sơ nào bật thì tin vẫn được thu thập nhưng không hiện.
+- **Mỗi khu vực có trang quản trị riêng:** tài chính ở `/quan-tri` (Vận hành, Cấu hình), việc làm ở `/viec-lam/quan-tri` (quét ngay, hồ sơ, nguồn, chi tiêu tìm kiếm, số ngày giữ tin, lịch sử quét). Chấp nhận lặp lại giao diện giữa hai trang.
+- **Trang bản tin việc làm:** chọn hồ sơ (`?profile=`) và ngày (`?date=`); lưới 3 cột; bấm vào thẻ mở popup chi tiết có link "Xem tin".
 - **Tìm kiếm trả phí:** ngoại lệ duy nhất của quy tắc zero cost (`.agents/rules/cost.md` §2a). Gemini + Google Search trên key trả trước; worker tự chặn ở 0,80 USD hoặc 4.000 lượt tìm mỗi tháng (`app_settings.job_search_budget`, `jobs/search/budget.ts`), hết ngân sách hoặc lỗi thì dùng DuckDuckGo (≤ 3 truy vấn/lần chạy). Chỉ dùng link trong kết quả tìm kiếm, không dùng chữ model viết.
 - **Hạn mức thêm vào dịch vụ free:** Jina ~10–40 request/ngày (giãn ≥ 3,1 giây, chạy lúc 07:45 sau bản tin sáng); Groq ~2–15 request chấm điểm/ngày (trần 20 request mỗi lần chạy).
 
